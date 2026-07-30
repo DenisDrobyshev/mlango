@@ -67,6 +67,8 @@ plugins:
             Introduction: Введение
             Tutorial: Учебник
             Concepts: Концепции
+            Philosophy: Философия
+            Architecture: Архитектура
             vs. the alternatives: Сравнение с альтернативами
             Building blocks: Строительные блоки
             Datasets: Датасеты
@@ -93,7 +95,13 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      # Diagrams live in the repository as text, so they can be reviewed in a
+      # diff and edited by anyone, instead of as images only one person can open.
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.highlight:
@@ -106,6 +114,8 @@ nav:
       - Introduction: index.md
       - Tutorial: tutorial.md
       - Concepts: concepts.md
+      - Philosophy: philosophy.md
+      - Architecture: architecture.md
       - vs. the alternatives: comparison.md
   - Building blocks:
       - Datasets: datasets.md
