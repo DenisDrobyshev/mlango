@@ -67,6 +67,7 @@ plugins:
             Introduction: Введение
             Tutorial: Учебник
             Concepts: Концепции
+            vs. the alternatives: Сравнение с альтернативами
             Building blocks: Строительные блоки
             Datasets: Датасеты
             Models: Модели
@@ -105,6 +106,7 @@ nav:
       - Introduction: index.md
       - Tutorial: tutorial.md
       - Concepts: concepts.md
+      - vs. the alternatives: comparison.md
   - Building blocks:
       - Datasets: datasets.md
       - Models: models.md

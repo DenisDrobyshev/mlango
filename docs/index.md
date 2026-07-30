@@ -15,6 +15,17 @@ module, declarative classes, migrations, an auto-generated admin, and a
 You declare datasets, models, agents and evaluations. The framework runs them,
 versions them, records them, and shows them to you.
 
+Two things make that different from the tools you already have. One class body
+becomes an admin page, a documented API endpoint, a migration and a CLI target
+at once — you wire up none of it. And **agents are a first-class family beside
+models**, sharing one metastore, one admin and one evaluation system, rather
+than living in a separate stack.
+
+!!! question "Already using MLflow, Kedro, W&B or LangChain?"
+    [**mlango and the alternatives**](comparison.md) says where each of them
+    sits, what genuinely overlaps, and — set out plainly — when mlango is the
+    wrong choice.
+
 ## Install
 
 ```bash
