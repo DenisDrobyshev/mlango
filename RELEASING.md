@@ -22,7 +22,7 @@ On **PyPI** → *Your projects* → *Publishing* → *Add a pending publisher*:
 | Field | Value |
 |---|---|
 | PyPI project name | `mlango` |
-| Owner | `DenisDrobyshev` |
+| Owner | `DrobyshevDev` |
 | Repository name | `mlango` |
 | Workflow name | `release.yml` |
 | Environment name | `pypi` |
@@ -31,6 +31,13 @@ Repeat on **TestPyPI** with environment name `testpypi`.
 
 A pending publisher works before the project exists, so the first release needs
 no manual upload.
+
+!!! warning "The owner is part of the identity"
+    Trusted publishing matches the repository that requested the token, owner
+    included. Moving the repository between accounts or organisations
+    invalidates the existing publisher and the release job fails at the publish
+    step, having passed everything before it. Add a publisher for the new owner
+    before the next tag; the old one can then be removed.
 
 ### 3. Create the GitHub environments
 
@@ -128,7 +135,7 @@ a patch release.
 
 - Check the project page renders: <https://pypi.org/project/mlango/>
 - Install from a clean environment and run the four-command quickstart
-- Verify the docs deployed: <https://denisdrobyshev.github.io/mlango/>
+- Verify the docs deployed: <https://drobyshevdev.github.io/mlango/>
 
 ## Yanking
 

@@ -2,9 +2,9 @@
 
 **A batteries-included framework for machine learning, analytics and LLM agents, built on Django's philosophy.**
 
-*Read this in [Русский](https://github.com/DenisDrobyshev/mlango/blob/master/README.ru.md).*
+*Read this in [Русский](https://github.com/DrobyshevDev/mlango/blob/master/README.ru.md).*
 
-[![CI](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml/badge.svg)](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml)
+[![CI](https://github.com/DrobyshevDev/mlango/actions/workflows/ci.yml/badge.svg)](https://github.com/DrobyshevDev/mlango/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/mlango)](https://pypi.org/project/mlango/)
 [![Python](https://img.shields.io/pypi/pyversions/mlango)](https://pypi.org/project/mlango/)
 [![License](https://img.shields.io/pypi/l/mlango)](https://opensource.org/licenses/MIT)
@@ -171,12 +171,12 @@ charts, side-by-side run comparison, dataset and model versions with one-click
 promotion, and a step-by-step trace viewer for every agent call. It is
 server-rendered with no build step and no CDN.
 
-![The mlango admin: everything a project declares, and everything it has run](https://raw.githubusercontent.com/DenisDrobyshev/mlango/master/docs/assets/admin-overview.png)
+![The mlango admin: everything a project declares, and everything it has run](https://raw.githubusercontent.com/DrobyshevDev/mlango/master/docs/assets/admin-overview.png)
 
 Every run keeps its environment, parameters, metrics and artifacts, so a number
 from six months ago still says where it came from:
 
-![A run page: environment, parameters, metrics and artifacts](https://raw.githubusercontent.com/DenisDrobyshev/mlango/master/docs/assets/admin-run.png)
+![A run page: environment, parameters, metrics and artifacts](https://raw.githubusercontent.com/DrobyshevDev/mlango/master/docs/assets/admin-run.png)
 
 ### Agents as declarations
 
@@ -293,18 +293,18 @@ schema, the admin and the CLI. Being a framework is what removes them.
 ## Documentation
 
 Full docs, including a tutorial that builds a project end to end:
-**<https://denisdrobyshev.github.io/mlango/>**
+**<https://drobyshevdev.github.io/mlango/>**
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](https://github.com/DenisDrobyshev/mlango/blob/master/CONTRIBUTING.md) for the
-development setup, and [CODE_OF_CONDUCT.md](https://github.com/DenisDrobyshev/mlango/blob/master/CODE_OF_CONDUCT.md) for community
+Contributions are welcome. See [CONTRIBUTING.md](https://github.com/DrobyshevDev/mlango/blob/master/CONTRIBUTING.md) for the
+development setup, and [CODE_OF_CONDUCT.md](https://github.com/DrobyshevDev/mlango/blob/master/CODE_OF_CONDUCT.md) for community
 expectations. Good first issues are labelled
-[`good first issue`](https://github.com/DenisDrobyshev/mlango/labels/good%20first%20issue).
+[`good first issue`](https://github.com/DrobyshevDev/mlango/labels/good%20first%20issue).
 
 ## License
 
-MIT. See [LICENSE](https://github.com/DenisDrobyshev/mlango/blob/master/LICENSE).
+MIT. See [LICENSE](https://github.com/DrobyshevDev/mlango/blob/master/LICENSE).
 
 mlango is not affiliated with or endorsed by the Django Software Foundation. It
 borrows Django's design philosophy, gratefully.

@@ -248,7 +248,7 @@ class TestReadme:
 
     def test_both_link_to_the_documentation_site(self, readmes):
         for name, text in readmes.items():
-            assert "denisdrobyshev.github.io/mlango" in text, name
+            assert "drobyshevdev.github.io/mlango" in text, name
 
     def test_each_points_at_the_other(self, readmes):
         assert "README.ru.md" in readmes["README.md"]

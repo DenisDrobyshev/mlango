@@ -95,7 +95,7 @@ docs/
 | batteries-included | Переводить идею, а не идиому: «со всем необходимым в комплекте». |
 
 Если термин не переводится, откройте
-[issue про перевод](https://github.com/DenisDrobyshev/mlango/issues/new?template=translation.yml)
+[issue про перевод](https://github.com/DrobyshevDev/mlango/issues/new?template=translation.yml)
 и обсудите его до того, как остановиться на варианте, — единообразие между
 страницами важнее любого отдельного слова.
 

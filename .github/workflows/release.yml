@@ -163,4 +163,4 @@ jobs:
           TAG="${GITHUB_REF#refs/tags/}"
           gh release create "$TAG" dist/* \
             --title "mlango ${TAG#v}" \
-            --notes "See [CHANGELOG.md](https://github.com/DenisDrobyshev/mlango/blob/master/CHANGELOG.md) for what changed."
+            --notes "See [CHANGELOG.md](https://github.com/DrobyshevDev/mlango/blob/master/CHANGELOG.md) for what changed."

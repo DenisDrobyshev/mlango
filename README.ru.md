@@ -2,9 +2,9 @@
 
 **Фреймворк «с батарейками» для машинного обучения, аналитики и LLM-агентов — построенный на философии Django.**
 
-*Read this in [English](https://github.com/DenisDrobyshev/mlango/blob/master/README.md).*
+*Read this in [English](https://github.com/DrobyshevDev/mlango/blob/master/README.md).*
 
-[![CI](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml/badge.svg)](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml)
+[![CI](https://github.com/DrobyshevDev/mlango/actions/workflows/ci.yml/badge.svg)](https://github.com/DrobyshevDev/mlango/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/mlango)](https://pypi.org/project/mlango/)
 [![Python](https://img.shields.io/pypi/pyversions/mlango)](https://pypi.org/project/mlango/)
 [![License](https://img.shields.io/pypi/l/mlango)](https://opensource.org/licenses/MIT)
@@ -280,18 +280,18 @@ SERVE_MIDDLEWARE = ["mlango.serve.middleware.ApiKeyMiddleware", ...]
 ## Документация
 
 Полная документация с учебником, собирающим проект от начала до конца:
-**<https://denisdrobyshev.github.io/mlango/ru/>**
+**<https://drobyshevdev.github.io/mlango/ru/>**
 
 ## Участие
 
-Вклад приветствуется — см. [CONTRIBUTING.md](https://github.com/DenisDrobyshev/mlango/blob/master/CONTRIBUTING.md) для настройки
-окружения и [CODE_OF_CONDUCT.md](https://github.com/DenisDrobyshev/mlango/blob/master/CODE_OF_CONDUCT.md) для правил сообщества.
+Вклад приветствуется — см. [CONTRIBUTING.md](https://github.com/DrobyshevDev/mlango/blob/master/CONTRIBUTING.md) для настройки
+окружения и [CODE_OF_CONDUCT.md](https://github.com/DrobyshevDev/mlango/blob/master/CODE_OF_CONDUCT.md) для правил сообщества.
 Переводы документации особенно нужны — по одной странице за раз, см.
-[Перевод](https://github.com/DenisDrobyshev/mlango/blob/master/docs/translating.md).
+[Перевод](https://github.com/DrobyshevDev/mlango/blob/master/docs/translating.md).
 
 ## Лицензия
 
-MIT — см. [LICENSE](https://github.com/DenisDrobyshev/mlango/blob/master/LICENSE).
+MIT — см. [LICENSE](https://github.com/DrobyshevDev/mlango/blob/master/LICENSE).
 
 mlango не связан с Django Software Foundation и не поддерживается ею. Он с
 благодарностью заимствует философию Django.

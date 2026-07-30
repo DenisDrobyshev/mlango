@@ -1,13 +1,13 @@
 # Contributing
 
 The full guide lives in
-[CONTRIBUTING.md](https://github.com/DenisDrobyshev/mlango/blob/master/CONTRIBUTING.md)
+[CONTRIBUTING.md](https://github.com/DrobyshevDev/mlango/blob/master/CONTRIBUTING.md)
 in the repository. The short version:
 
 ## Setup
 
 ```bash
-git clone https://github.com/DenisDrobyshev/mlango
+git clone https://github.com/DrobyshevDev/mlango
 cd mlango
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[all]"

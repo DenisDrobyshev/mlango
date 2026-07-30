@@ -154,7 +154,7 @@ REQUIREMENTS = """mlango[sklearn]
 
 PROJECT_README = """# __PROJECT__
 
-An [mlango](https://github.com/DenisDrobyshev/mlango) project.
+An [mlango](https://github.com/DrobyshevDev/mlango) project.
 
 ## Get running
 

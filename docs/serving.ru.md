@@ -195,4 +195,4 @@ gunicorn "mlango.serve.api:create_app()" -k uvicorn.workers.UvicornWorker -w 4
 - `STORAGE` на общее хранилище, если воркеры должны видеть артефакты друг друга
 
 Полный список дефолтов разработки, которые нужно изменить, — в
-[SECURITY.md](https://github.com/DenisDrobyshev/mlango/blob/master/SECURITY.md).
+[SECURITY.md](https://github.com/DrobyshevDev/mlango/blob/master/SECURITY.md).

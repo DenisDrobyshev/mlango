@@ -190,5 +190,5 @@ Set `MLANGO_SETTINGS_MODULE` in the environment, and before you go public:
 - `METASTORE` pointing at Postgres if more than one worker writes runs
 - `STORAGE` pointing at shared storage if workers must see each other's artifacts
 
-See [SECURITY.md](https://github.com/DenisDrobyshev/mlango/blob/master/SECURITY.md)
+See [SECURITY.md](https://github.com/DrobyshevDev/mlango/blob/master/SECURITY.md)
 for the full list of development defaults you must change.

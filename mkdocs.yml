@@ -1,8 +1,8 @@
 site_name: mlango
 site_description: A batteries-included framework for machine learning, analytics and LLM agents.
-site_url: https://denisdrobyshev.github.io/mlango/
-repo_url: https://github.com/DenisDrobyshev/mlango
-repo_name: DenisDrobyshev/mlango
+site_url: https://drobyshevdev.github.io/mlango/
+repo_url: https://github.com/DrobyshevDev/mlango
+repo_name: DrobyshevDev/mlango
 edit_uri: edit/master/docs/
 copyright: MIT licensed. Not affiliated with the Django Software Foundation.
 
@@ -135,4 +135,4 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/DenisDrobyshev/mlango
+      link: https://github.com/DrobyshevDev/mlango

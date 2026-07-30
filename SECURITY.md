@@ -13,7 +13,7 @@ mlango is pre-1.0. Security fixes land on the latest release.
 **Please do not open a public issue for a security problem.**
 
 Use GitHub's private vulnerability reporting:
-**[Report a vulnerability](https://github.com/DenisDrobyshev/mlango/security/advisories/new)**.
+**[Report a vulnerability](https://github.com/DrobyshevDev/mlango/security/advisories/new)**.
 It is private between you and the maintainers, it keeps the whole exchange in
 one place, and it issues a CVE if one turns out to be warranted.
 

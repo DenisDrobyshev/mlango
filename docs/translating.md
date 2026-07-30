@@ -94,7 +94,7 @@ in the local script if that reads more naturally. Suggested handling:
 | batteries-included | Translate the idea, not the idiom. |
 
 If a term resists translation, open a
-[translation issue](https://github.com/DenisDrobyshev/mlango/issues/new?template=translation.yml)
+[translation issue](https://github.com/DrobyshevDev/mlango/issues/new?template=translation.yml)
 and discuss it before committing to a choice — consistency across pages matters
 more than any single word.
 

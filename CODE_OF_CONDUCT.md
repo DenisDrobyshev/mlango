@@ -55,7 +55,7 @@ an individual is officially representing the community in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behaviour may be
 reported to the maintainers through
-**[a private security advisory](https://github.com/DenisDrobyshev/mlango/security/advisories/new)**,
+**[a private security advisory](https://github.com/DrobyshevDev/mlango/security/advisories/new)**,
 which is the one channel here that is private between you and the maintainers
 and does not require knowing anyone's email address. All complaints will be
 reviewed and investigated promptly and fairly.

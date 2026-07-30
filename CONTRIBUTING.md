@@ -7,7 +7,7 @@ minutes* matter as much as features.
 ## Development setup
 
 ```bash
-git clone https://github.com/DenisDrobyshev/mlango
+git clone https://github.com/DrobyshevDev/mlango
 cd mlango
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[all]"

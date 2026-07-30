@@ -85,11 +85,11 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/DenisDrobyshev/mlango"
-Documentation = "https://denisdrobyshev.github.io/mlango/"
-Repository = "https://github.com/DenisDrobyshev/mlango"
-Changelog = "https://github.com/DenisDrobyshev/mlango/blob/master/CHANGELOG.md"
-Issues = "https://github.com/DenisDrobyshev/mlango/issues"
+Homepage = "https://github.com/DrobyshevDev/mlango"
+Documentation = "https://drobyshevdev.github.io/mlango/"
+Repository = "https://github.com/DrobyshevDev/mlango"
+Changelog = "https://github.com/DrobyshevDev/mlango/blob/master/CHANGELOG.md"
+Issues = "https://github.com/DrobyshevDev/mlango/issues"
 
 [project.scripts]
 mlango = "mlango.management.manager:main"

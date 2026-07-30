@@ -1,6 +1,6 @@
 # quickstart
 
-An [mlango](https://github.com/DenisDrobyshev/mlango) project.
+An [mlango](https://github.com/DrobyshevDev/mlango) project.
 
 ## Get running
 

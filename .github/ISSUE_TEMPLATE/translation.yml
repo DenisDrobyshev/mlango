@@ -10,7 +10,7 @@ body:
         translate everything before opening a pull request. Untranslated pages
         fall back to English automatically.
 
-        See [Translating](https://denisdrobyshev.github.io/mlango/translating/)
+        See [Translating](https://drobyshevdev.github.io/mlango/translating/)
         for the file naming and the workflow.
 
   - type: input
