@@ -6,6 +6,41 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **Transformers trainer** (`mlango[transformers]`) — fine-tune a pretrained
+  encoder for text classification or regression. The loop is mlango's own, so
+  callbacks, early stopping, metric recording and run tracking behave the same
+  as for any other backend; tokenisation, pretrained weights and heads come from
+  Hugging Face. Two text fields become a sentence pair automatically.
+- **Model presets** — `TextClassifier`, `TextRegressor`, `TabularClassifier`,
+  `TabularRegressor`, `TransformerModel`. A complete declaration is now three
+  lines, with every default overridable.
+- **Meta options inherit.** A subclass writing its own `class Meta` keeps
+  everything the parent declared and overrides only what it names. Python class
+  bodies do not inherit on their own; without this, a reusable base class was
+  impossible to write.
+- **Agent streaming.** `Agent.stream()` yields typed events —  `Started`,
+  `Thinking`, `TextChunk`, `ToolCalled`, `ToolFinished`, `StepFinished`,
+  `Finished`, `Failed` — as they happen, and `Agent.as_stream_endpoint()` serves
+  them as Server-Sent Events. `run()` and `stream()` share one loop
+  implementation, so they cannot disagree about what the agent did.
+- **Data sources**: `ParquetSource` (streamed in row-group batches, count from
+  the file footer), `SQLSource` (server-side cursor, defaults to the metastore),
+  `HuggingFaceSource`, and `DatasetVersionSource` for pinning a derived dataset
+  to an exact upstream snapshot.
+- **`Registry.unregister()`** and a documented registry-isolation pattern, so
+  tests and notebooks can redeclare a class.
+- `py.typed`, so downstream type checkers honour mlango's annotations.
+- Release workflow using PyPI trusted publishing, with the tag checked against
+  `__version__`, the changelog checked for a matching section, and the built
+  wheel verified to contain the admin templates and `py.typed`.
+
+### Fixed
+
+- A configuration mistake in a transformers preset now reports the mistake
+  rather than surfacing as `ModuleNotFoundError: transformers`.
+
 ## 0.1.0 — 2026-07-30
 
 First release. mlango applies Django's design philosophy to machine learning,

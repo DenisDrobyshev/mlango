@@ -75,6 +75,18 @@ class Options:
             else:
                 self.extras[name] = value
 
+    def inherit_extras(self, inherited: dict[str, Any]) -> None:
+        """Fill in Meta options a base class declared and this one did not.
+
+        ``abstract`` is deliberately excluded: inheriting it would make every
+        subclass of an abstract base abstract too, so nothing could ever be
+        declared concrete.
+        """
+        for key, value in inherited.items():
+            if key == "abstract":
+                continue
+            self.extras.setdefault(key, value)
+
     def contribute_fields(self, fields: list[Field]) -> None:
         self.fields = sorted(fields, key=lambda f: f.creation_counter)
 

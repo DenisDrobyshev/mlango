@@ -1,6 +1,17 @@
 """Agents: declared LLM agents with tools, memory and full tracing."""
 
 from mlango.agents.agent import Agent, AgentRun
+from mlango.agents.events import (
+    AgentEvent,
+    Failed,
+    Finished,
+    Started,
+    StepFinished,
+    TextChunk,
+    Thinking,
+    ToolCalled,
+    ToolFinished,
+)
 from mlango.agents.memory import (
     BufferMemory,
     Memory,
@@ -22,6 +33,15 @@ from mlango.agents.tracing import Tracer, get_trace, recent_traces
 __all__ = [
     "Agent",
     "AgentRun",
+    "AgentEvent",
+    "Started",
+    "Thinking",
+    "TextChunk",
+    "ToolCalled",
+    "ToolFinished",
+    "StepFinished",
+    "Finished",
+    "Failed",
     "tool",
     "Tool",
     "ToolResult",

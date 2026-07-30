@@ -6,6 +6,7 @@ from mlango.serve.endpoints import (
     PredictRequest,
     PredictResponse,
     agent_endpoint,
+    agent_stream_endpoint,
     model_endpoint,
 )
 from mlango.serve.routing import Endpoint, Route, include, load_routes, path
@@ -18,6 +19,7 @@ __all__ = [
     "Endpoint",
     "model_endpoint",
     "agent_endpoint",
+    "agent_stream_endpoint",
     "PredictRequest",
     "PredictResponse",
     "ChatRequest",

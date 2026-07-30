@@ -146,6 +146,65 @@ def agent_endpoint(agent_class: type, **agent_kwargs: Any) -> Endpoint:
     )
 
 
+def agent_stream_endpoint(agent_class: type, **agent_kwargs: Any) -> Endpoint:
+    """Build a Server-Sent Events endpoint for a declared agent.
+
+    A multi-step agent can take a minute, and a blank screen for a minute reads
+    as broken. This streams each step as it happens, in the ``text/event-stream``
+    format every browser understands natively through ``EventSource``.
+    """
+    import json
+
+    from starlette.responses import StreamingResponse
+
+    label = agent_class._meta.label
+
+    def handler(payload: ChatRequest) -> StreamingResponse:
+        def events():
+            agent = agent_class(**agent_kwargs)
+            try:
+                for event in agent.stream(payload.message, session_id=payload.session_id):
+                    body = json.dumps(event.describe(), ensure_ascii=False)
+                    yield f"event: {event.kind}\ndata: {body}\n\n"
+            except Exception as exc:  # noqa: BLE001 - reported on the stream, not as a 500
+                # The response has already started, so an exception cannot become
+                # a status code; the client is told on the stream instead.
+                logger.exception("Streaming %s failed", label)
+                body = json.dumps(
+                    {"event": "failed", "error": str(exc), "exception_type": type(exc).__name__}
+                )
+                yield f"event: failed\ndata: {body}\n\n"
+
+        return StreamingResponse(
+            events(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                # Tells nginx not to buffer, which would defeat the point.
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    handler.__name__ = f"stream_{label.replace('.', '_')}"
+    instance = agent_class()
+    return Endpoint(
+        kind="agent",
+        label=label,
+        handler=handler,
+        summary=f"Stream a conversation with {label}",
+        description=(
+            f"Server-Sent Events from {label}. Event names: started, thinking, "
+            f"text_chunk, tool_called, tool_finished, step_finished, finished, failed."
+        ),
+        meta={
+            "model": agent_class.get_model(),
+            "tools": instance.get_tools().names(),
+            "streaming": True,
+        },
+    )
+
+
 def _safe(fn: Any) -> Any:
     """Call an introspection helper, tolerating an incomplete declaration."""
     try:
@@ -157,6 +216,7 @@ def _safe(fn: Any) -> Any:
 __all__ = [
     "model_endpoint",
     "agent_endpoint",
+    "agent_stream_endpoint",
     "PredictRequest",
     "PredictResponse",
     "ChatRequest",

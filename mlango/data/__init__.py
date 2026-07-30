@@ -1,6 +1,12 @@
 """Datasets: declaration, lazy pipelines and versioned snapshots."""
 
 from mlango.data.dataset import Dataset, Manager
+from mlango.data.extra_sources import (
+    DatasetVersionSource,
+    HuggingFaceSource,
+    ParquetSource,
+    SQLSource,
+)
 from mlango.data.query import DataQuerySet, Record
 from mlango.data.sources import (
     ChainSource,
@@ -26,4 +32,8 @@ __all__ = [
     "CSVSource",
     "DirectorySource",
     "ChainSource",
+    "ParquetSource",
+    "SQLSource",
+    "HuggingFaceSource",
+    "DatasetVersionSource",
 ]

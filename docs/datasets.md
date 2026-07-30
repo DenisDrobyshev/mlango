@@ -44,6 +44,44 @@ class Reviews(Dataset):
 | `InMemorySource(rows)` | A list of dicts — fixtures and tests |
 | `PythonSource(factory)` | A callable yielding records — generated or scraped data |
 | `ChainSource(*sources)` | Several sources concatenated — shards, multiple dumps |
+| `ParquetSource(path)` | Columnar data, streamed in row-group batches |
+| `SQLSource(query, url=None)` | Anything SQLAlchemy can reach; defaults to the metastore |
+| `HuggingFaceSource(path, split=...)` | A split from the Hugging Face hub, optionally streaming |
+| `DatasetVersionSource(label, version)` | Another dataset's frozen snapshot |
+
+The last three need an extra:
+
+```bash
+pip install "mlango[parquet]"        # ParquetSource
+pip install "mlango[huggingface]"    # HuggingFaceSource
+```
+
+```python
+class Reviews(Dataset):
+    text = fields.TextField()
+    label = fields.LabelField(["neg", "pos"])
+
+    class Meta:
+        source = ParquetSource("data/reviews.parquet", columns=["text", "label"])
+```
+
+`ParquetSource.count()` reads the file footer, so counting a hundred-million-row
+file is instant. `SQLSource` streams with a server-side cursor rather than
+loading the result set.
+
+`DatasetVersionSource` is how a derived dataset pins an exact upstream state
+instead of following whatever the source says today:
+
+```python
+class BalancedReviews(Dataset):
+    """Built on a pinned snapshot, so the derivation is reproducible."""
+
+    text = fields.TextField()
+    label = fields.LabelField(["neg", "pos"])
+
+    class Meta:
+        source = DatasetVersionSource("reviews.Reviews", version=3)
+```
 
 Or override `records()` and skip `source` entirely:
 

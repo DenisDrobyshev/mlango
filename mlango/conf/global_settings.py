@@ -57,6 +57,7 @@ STORAGE: dict[str, object] = {
 TRAINERS: dict[str, str] = {
     "sklearn": "mlango.training.backends.sklearn_backend.SklearnTrainer",
     "torch": "mlango.training.backends.torch_backend.TorchTrainer",
+    "transformers": "mlango.training.backends.transformers_backend.TransformersTrainer",
 }
 
 #: Default device for backends that care. "auto" picks cuda when available.

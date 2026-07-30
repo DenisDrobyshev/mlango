@@ -31,3 +31,4 @@ site/
 *.swp
 .DS_Store
 Thumbs.db
+dist/

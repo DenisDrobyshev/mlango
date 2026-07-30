@@ -70,6 +70,24 @@ def project(tmp_path):
     settings.reset()
 
 
+@pytest.fixture
+def isolated_registry():
+    """Remove anything declared during a test.
+
+    Labels are unique on purpose — two datasets called ``Reviews`` in one app is
+    a bug. That makes redeclaring a class inside several test functions an
+    error, so tests that declare classes locally snapshot the registry and roll
+    it back. This is the pattern to copy in your own project's tests.
+    """
+    from mlango.core.registry import KINDS, apps
+
+    before = {kind: set(apps._objects.get(kind, {})) for kind in KINDS}
+    yield apps
+    for kind in KINDS:
+        for label in set(apps._objects.get(kind, {})) - before[kind]:
+            apps.unregister(kind, label)
+
+
 @pytest.fixture(scope="session")
 def reviews():
     """The shared dataset class.

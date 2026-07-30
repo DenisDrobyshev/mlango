@@ -147,6 +147,68 @@ result.ranked()           # every completed trial, best first
 One parent run holds the search; each trial is a full child run with its own
 record. A failing trial is recorded and the sweep continues.
 
+## Presets
+
+The recurring shapes are already written. Django ships generic views so the
+ninetieth CRUD page is three lines; these are the same idea:
+
+```python
+from mlango.training import TextClassifier
+
+class Sentiment(TextClassifier):
+    """Fine-tune a pretrained encoder on the reviews."""
+
+    class Meta:
+        dataset = Reviews
+        features = ["text"]
+```
+
+That is a complete declaration. `base_model`, `learning_rate`, `epochs`,
+`batch_size`, `max_length`, `weight_decay`, `warmup_ratio` and `build()` come
+from the preset, and every one of them is overridable.
+
+| Preset | Trainer | For |
+|---|---|---|
+| `TextClassifier` | `transformers` | Fine-tuning a pretrained encoder to classify text |
+| `TextRegressor` | `transformers` | Predicting a continuous value from text |
+| `TabularClassifier` | `torch` | A small feed-forward net over numeric columns |
+| `TabularRegressor` | `torch` | The same, predicting a number |
+| `TransformerModel` | `transformers` | The shared base, if you want a different head |
+
+!!! note "Meta options inherit"
+    A subclass writing its own `class Meta` keeps everything the parent declared
+    — `trainer`, `task`, `monitor` — and overrides only what it names. Python
+    class bodies do not inherit on their own, so mlango merges them; without
+    that, a reusable base class would be impossible to write.
+
+```bash
+pip install "mlango[transformers]"
+python manage.py train reviews.Sentiment -p epochs=2 -p learning_rate=3e-5
+```
+
+The fine-tuning loop is mlango's own, not `transformers.Trainer` — so callbacks,
+early stopping, metric recording and run tracking behave identically whichever
+backend a project picked. What is borrowed is tokenisation, pretrained weights
+and the model heads.
+
+Override only what is genuinely model-specific:
+
+| Method | Replaces |
+|---|---|
+| `encode_batch(records, target)` | Tokenising one or two text fields |
+| `configure_optimizer(module)` | AdamW with no decay on biases and layer norms |
+| `build()` | The head chosen from the target field's classes |
+
+Two text fields become a sentence pair automatically, which covers entailment,
+similarity and question-answer scoring:
+
+```python
+class Entailment(TextClassifier):
+    class Meta:
+        dataset = Pairs
+        features = ["premise", "hypothesis"]
+```
+
 ## Callbacks
 
 The middleware of the training loop:

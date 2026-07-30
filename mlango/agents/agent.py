@@ -18,11 +18,23 @@ An agent declares *what* it is; the loop that makes it work is written once.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from mlango.agents.events import (
+    AgentEvent,
+    Failed,
+    Finished,
+    Started,
+    StepFinished,
+    TextChunk,
+    Thinking,
+    ToolCalled,
+    ToolFinished,
+)
 from mlango.agents.memory import Memory, NullMemory
-from mlango.agents.providers.base import Completion, Provider, Usage, get_provider
+from mlango.agents.providers.base import Completion, Provider, ToolCall, Usage, get_provider
 from mlango.agents.tools import Tool, Toolbox, ToolResult
 from mlango.agents.tracing import Tracer
 from mlango.core.base import Declarative
@@ -179,7 +191,10 @@ class Agent(Declarative):
         agent_started.send(sender=type(self), agent=self, trace=tracer)
 
         try:
-            self._loop(provider, toolbox, messages, tracer, result, limit, provider_kwargs)
+            for _event in self._loop(
+                provider, toolbox, messages, tracer, result, limit, provider_kwargs
+            ):
+                pass
         except ProviderError as exc:
             result.error = str(exc)
             tracer.fail(exc, steps=result.steps)
@@ -191,6 +206,93 @@ class Agent(Declarative):
             agent_finished.send(sender=type(self), agent=self, trace=tracer)
             raise RunError(f"{opts.label} failed: {exc}") from exc
 
+        self._settle(result, tracer, store, session_id, user_turn)
+        return result
+
+    def stream(
+        self,
+        message: str,
+        *,
+        session_id: str = "",
+        memory: Memory | None = None,
+        history: list[dict[str, Any]] | None = None,
+        max_steps: int | None = None,
+        run_id: int | None = None,
+        **provider_kwargs: Any,
+    ) -> Iterator[AgentEvent]:
+        """Run the loop, yielding events as they happen.
+
+        Exactly the same loop as :meth:`run` — one implementation, so the two can
+        never disagree about what the agent did. The final :class:`Finished`
+        event carries the identical :class:`AgentRun`.
+
+            for event in agent.stream("hello"):
+                if isinstance(event, TextChunk):
+                    print(event.text, end="", flush=True)
+        """
+        opts = type(self)._meta
+        provider = self.get_provider()
+        toolbox = self.get_tools()
+        store = memory if memory is not None else self.get_memory()
+        limit = max_steps or self.get_max_steps()
+
+        prior = list(history) if history is not None else store.load(session_id)
+        user_turn = {"role": "user", "content": message}
+        messages: list[dict[str, Any]] = [*prior, user_turn]
+
+        tracer = Tracer(
+            opts.label,
+            session_id=session_id,
+            run_id=run_id,
+            enabled=self.tracing_enabled(),
+            meta={"model": self.get_model(), "provider": provider.name},
+        ).start(message)
+
+        result = AgentRun(session_id=session_id, trace_uuid=tracer.uuid, messages=messages)
+        agent_started.send(sender=type(self), agent=self, trace=tracer)
+
+        yield Started(
+            step=0,
+            agent=opts.label,
+            trace=tracer.uuid,
+            session_id=session_id,
+            message=message,
+        )
+
+        try:
+            yield from self._loop(
+                provider, toolbox, messages, tracer, result, limit, provider_kwargs
+            )
+        except Exception as exc:
+            result.error = f"{type(exc).__name__}: {exc}"
+            tracer.fail(exc, steps=result.steps)
+            agent_finished.send(sender=type(self), agent=self, trace=tracer)
+            yield Failed(step=result.steps, error=str(exc), exception_type=type(exc).__name__)
+            if isinstance(exc, ProviderError):
+                raise
+            raise RunError(f"{opts.label} failed: {exc}") from exc
+
+        self._settle(result, tracer, store, session_id, user_turn)
+
+        yield Finished(
+            step=result.steps,
+            output=result.output,
+            trace=result.trace_uuid,
+            tools_used=result.tools_used,
+            usage=result.usage.describe(),
+            error=result.error,
+            result=result,
+        )
+
+    def _settle(
+        self,
+        result: AgentRun,
+        tracer: Tracer,
+        store: Memory,
+        session_id: str,
+        user_turn: dict[str, Any],
+    ) -> None:
+        """Close the trace and record the turn. Shared by run() and stream()."""
         tracer.finish(
             result.output,
             steps=result.steps,
@@ -204,7 +306,6 @@ class Agent(Declarative):
             store.append(session_id, [user_turn, {"role": "assistant", "content": result.output}])
 
         agent_finished.send(sender=type(self), agent=self, trace=tracer)
-        return result
 
     # -- the loop ------------------------------------------------------------
 
@@ -217,13 +318,20 @@ class Agent(Declarative):
         result: AgentRun,
         limit: int,
         provider_kwargs: dict[str, Any],
-    ) -> None:
+    ) -> Iterator[AgentEvent]:
+        """The one and only agent loop, as a generator of events.
+
+        ``run()`` drains it and ignores the events; ``stream()`` forwards them.
+        Having a single implementation is what keeps the two honest.
+        """
         opts = type(self)._meta
         system = self.get_system()
         schemas = toolbox.schemas() or None
 
         for step in range(1, limit + 1):
             result.steps = step
+            yield Thinking(step=step, model=self.get_model())
+
             with tracer.span(
                 f"llm:{self.get_model()}", Span.LLM, {"messages": len(messages)}
             ) as span:
@@ -244,6 +352,15 @@ class Agent(Declarative):
             result.usage = result.usage.add(completion.usage)
             result.stop_reason = completion.stop_reason
             agent_step.send(sender=type(self), agent=self, trace=tracer, step=step)
+
+            if completion.text:
+                yield TextChunk(step=step, text=completion.text)
+            yield StepFinished(
+                step=step,
+                stop_reason=completion.stop_reason,
+                input_tokens=completion.usage.input_tokens,
+                output_tokens=completion.usage.output_tokens,
+            )
 
             if completion.stop_reason == Completion.REFUSAL:
                 detail = completion.refusal or {}
@@ -266,7 +383,24 @@ class Agent(Declarative):
                 result.output = completion.text
                 return
 
-            results = self._dispatch(toolbox, completion, tracer)
+            results = []
+            for call in completion.tool_calls:
+                yield ToolCalled(
+                    step=step,
+                    name=call.name,
+                    arguments=call.arguments,
+                    tool_call_id=call.id,
+                )
+                outcome = self._run_one_tool(toolbox, call, tracer)
+                results.append(outcome)
+                yield ToolFinished(
+                    step=step,
+                    name=outcome.name,
+                    content=outcome.as_text()[:4000],
+                    is_error=outcome.is_error,
+                    duration_s=outcome.duration_s,
+                    tool_call_id=outcome.tool_call_id,
+                )
             result.tool_results.extend(results)
             # Every tool_result for one assistant turn goes back in a single
             # user message; splitting them teaches the model to stop batching.
@@ -291,32 +425,31 @@ class Agent(Declarative):
         )
         result.output = _last_text(messages)
 
+    def _run_one_tool(self, toolbox: Toolbox, call: ToolCall, tracer: Tracer) -> ToolResult:
+        """Execute one requested tool, reporting an unknown name to the model."""
+        found = toolbox.get(call.name)
+        if found is None:
+            return ToolResult(
+                tool_call_id=call.id,
+                name=call.name,
+                content=(
+                    f"No tool named {call.name!r} is available. "
+                    f"Available tools: {', '.join(toolbox.names()) or '(none)'}."
+                ),
+                is_error=True,
+            )
+
+        tool_called.send(sender=type(self), agent=self, tool=found, arguments=call.arguments)
+        with tracer.span(f"tool:{call.name}", Span.TOOL, call.arguments) as span:
+            outcome = found.run(call_id=call.id, **call.arguments)
+            span["output"] = {"content": outcome.as_text()[:4000], "is_error": outcome.is_error}
+        return outcome
+
     def _dispatch(
         self, toolbox: Toolbox, completion: Completion, tracer: Tracer
     ) -> list[ToolResult]:
-        results: list[ToolResult] = []
-        for call in completion.tool_calls:
-            found = toolbox.get(call.name)
-            if found is None:
-                results.append(
-                    ToolResult(
-                        tool_call_id=call.id,
-                        name=call.name,
-                        content=(
-                            f"No tool named {call.name!r} is available. "
-                            f"Available tools: {', '.join(toolbox.names()) or '(none)'}."
-                        ),
-                        is_error=True,
-                    )
-                )
-                continue
-
-            tool_called.send(sender=type(self), agent=self, tool=found, arguments=call.arguments)
-            with tracer.span(f"tool:{call.name}", Span.TOOL, call.arguments) as span:
-                outcome = found.run(call_id=call.id, **call.arguments)
-                span["output"] = {"content": outcome.as_text()[:4000], "is_error": outcome.is_error}
-            results.append(outcome)
-        return results
+        """Every tool the model asked for, in order."""
+        return [self._run_one_tool(toolbox, call, tracer) for call in completion.tool_calls]
 
     # -- serving -------------------------------------------------------------
 
@@ -326,6 +459,13 @@ class Agent(Declarative):
         from mlango.serve.endpoints import agent_endpoint
 
         return agent_endpoint(cls, **agent_kwargs)
+
+    @classmethod
+    def as_stream_endpoint(cls, **agent_kwargs: Any) -> Any:
+        """A Server-Sent Events endpoint, for a UI that shows progress."""
+        from mlango.serve.endpoints import agent_stream_endpoint
+
+        return agent_stream_endpoint(cls, **agent_kwargs)
 
     # -- introspection -------------------------------------------------------
 

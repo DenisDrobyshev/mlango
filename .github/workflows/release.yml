@@ -1,0 +1,166 @@
+name: Release to PyPI
+
+# Publishing is driven by a tag, so a release is always traceable to a commit:
+#   git tag -a v0.1.0 -m "mlango 0.1.0" && git push origin v0.1.0
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Where to publish
+        required: true
+        default: testpypi
+        type: choice
+        options: [testpypi, pypi]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify before publishing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - run: pip install -e ".[sklearn,dev]"
+
+      - name: Lint and test
+        run: |
+          ruff check mlango tests
+          ruff format --check mlango tests
+          pytest -q
+
+      - name: The tag must match the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PKG=$(python -c "import mlango; print(mlango.get_version())")
+          echo "tag=$TAG package=$PKG"
+          test "$TAG" = "$PKG" || {
+            echo "::error::Tag v$TAG does not match mlango.__version__ ($PKG)."
+            exit 1
+          }
+
+      - name: The changelog must mention this version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          grep -q "^## $TAG" CHANGELOG.md || {
+            echo "::error::CHANGELOG.md has no '## $TAG' section."
+            exit 1
+          }
+
+  build:
+    name: Build distributions
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install build twine
+      - run: python -m build
+
+      - name: Check the metadata renders on PyPI
+        run: twine check --strict dist/*
+
+      - name: The wheel must contain the admin templates and py.typed
+        run: |
+          python - <<'PY'
+          import glob, sys, zipfile
+
+          names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+          missing = []
+          if not any(n.endswith("admin/templates/base.html") for n in names):
+              missing.append("admin templates")
+          if not any(n.endswith("mlango/py.typed") for n in names):
+              missing.append("py.typed")
+          if missing:
+              sys.exit(f"wheel is missing: {', '.join(missing)}")
+          print(f"wheel contains {len(names)} files, templates and py.typed present")
+          PY
+
+      - name: The wheel must work from a clean environment
+        run: |
+          python -m venv /tmp/fresh
+          /tmp/fresh/bin/pip install "$(ls dist/*.whl)[sklearn]"
+          /tmp/fresh/bin/mlango --version
+          cd /tmp
+          /tmp/fresh/bin/mlango startproject smoke
+          cd smoke
+          /tmp/fresh/bin/python manage.py check
+          /tmp/fresh/bin/python manage.py migrate
+          /tmp/fresh/bin/python manage.py train demo.Sentiment
+          /tmp/fresh/bin/python manage.py evaluate demo.SentimentAccuracy
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    name: Publish to TestPyPI
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/mlango
+    permissions:
+      id-token: write        # trusted publishing: no API token stored anywhere
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    name: Publish to PyPI
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mlango
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Attach the distributions to the GitHub release
+    needs: pypi
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release create "$TAG" dist/* \
+            --title "mlango ${TAG#v}" \
+            --notes "See [CHANGELOG.md](https://github.com/DenisDrobyshev/mlango/blob/master/CHANGELOG.md) for what changed."

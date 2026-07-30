@@ -135,6 +135,93 @@ jobs:
           echo
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8099/admin/)" = "200"
 
+  transformers:
+    name: Transformers trainer fine-tunes a real checkpoint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install with the transformers extra
+        run: pip install -e ".[transformers,dev]"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-tiny-bert
+
+      # The trainer needs real pretrained weights to be exercised at all, so it
+      # gets its own job with a deliberately tiny checkpoint.
+      - name: Fine-tune a tiny checkpoint end to end
+        run: |
+          python - <<'PY'
+          import tempfile
+
+          from mlango.conf import settings
+
+          settings.configure(
+              BASE_DIR=tempfile.mkdtemp(),
+              METASTORE={"URL": "sqlite:///ci.db"},
+              DEFAULT_CALLBACKS=[],
+              SEED=0,
+          )
+
+          from mlango.core import fields
+          from mlango.data import Dataset, InMemorySource
+          from mlango.training import TextClassifier
+
+          ROWS = [
+              {
+                  "id": i,
+                  "text": "this is wonderful" if i % 2 else "this is dreadful",
+                  "label": "pos" if i % 2 else "neg",
+              }
+              for i in range(24)
+          ]
+
+          class Reviews(Dataset):
+              id = fields.IntegerField()
+              text = fields.TextField()
+              label = fields.LabelField(["neg", "pos"])
+
+              class Meta:
+                  source = InMemorySource(ROWS)
+                  primary_key = "id"
+
+          class Sentiment(TextClassifier):
+              """Fine-tuned in CI on a tiny checkpoint."""
+
+              base_model = fields.CharField(
+                  default="hf-internal-testing/tiny-random-DistilBertForSequenceClassification"
+              )
+              epochs = fields.IntegerField(default=1)
+              batch_size = fields.IntegerField(default=4)
+              max_length = fields.IntegerField(default=32)
+
+              class Meta:
+                  dataset = Reviews
+                  features = ["text"]
+
+          model = Sentiment()
+          run = model.train()
+          record = run.refresh()
+          assert record.status == "finished", record.error
+          assert "val_loss" in record.summary or record.summary, record.summary
+          print("trained:", {k: v for k, v in record.summary.items() if isinstance(v, (int, float))})
+
+          prediction = model.predict("this is wonderful")
+          assert prediction in {"neg", "pos"}, prediction
+          proba = model.predict_proba("this is wonderful")
+          assert set(proba) == {"neg", "pos"}, proba
+          print("predicted:", prediction, proba)
+
+          reloaded = Sentiment.load()
+          assert reloaded.predict("this is dreadful") in {"neg", "pos"}
+          print("reloaded from the saved checkpoint successfully")
+          PY
+
   build:
     name: Package builds and installs cleanly
     runs-on: ubuntu-latest

@@ -108,6 +108,17 @@ class DeclarativeMeta(type):
             if field.name:
                 merged[field.name] = field
 
+        # Meta options inherit the same way fields do. Python class bodies are
+        # independent, so a subclass writing its own `class Meta` would otherwise
+        # silently lose everything the parent declared — which makes a reusable
+        # base class (see mlango.training.presets) impossible to write.
+        inherited_extras: dict[str, Any] = {}
+        for base in reversed(cls.__mro__[1:]):
+            base_meta = getattr(base, "_meta", None)
+            if base_meta is not None:
+                inherited_extras.update(base_meta.extras)
+        opts.inherit_extras(inherited_extras)
+
         opts.local_fields = sorted(local_fields, key=lambda f: f.creation_counter)
         opts.contribute_fields(list(merged.values()))
         opts.bind(cls)

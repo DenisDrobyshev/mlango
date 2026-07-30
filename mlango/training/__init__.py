@@ -10,6 +10,13 @@ from mlango.training.callbacks import (
     build_callbacks,
 )
 from mlango.training.model import Model
+from mlango.training.presets import (
+    TabularClassifier,
+    TabularRegressor,
+    TextClassifier,
+    TextRegressor,
+    TransformerModel,
+)
 from mlango.training.run import (
     RunContext,
     get_run,
@@ -23,6 +30,11 @@ from mlango.training.trainer import Trainer, available_trainers, get_trainer
 
 __all__ = [
     "Model",
+    "TransformerModel",
+    "TextClassifier",
+    "TextRegressor",
+    "TabularClassifier",
+    "TabularRegressor",
     "Trainer",
     "get_trainer",
     "available_trainers",

@@ -199,6 +199,66 @@ A provider does exactly one thing: turn a request into one response. The loop,
 memory and tracing stay the framework's, so swapping providers never changes
 agent behaviour.
 
+## Streaming
+
+`run()` returns only when the loop is finished. A multi-step agent can take a
+minute, and a blank screen for a minute reads as broken — so `stream()` yields
+events as they happen:
+
+```python
+from mlango.agents import Finished, TextChunk, ToolCalled
+
+for event in Support().stream("How do I rotate an API key?"):
+    if isinstance(event, TextChunk):
+        print(event.text, end="", flush=True)
+    elif isinstance(event, ToolCalled):
+        print(f"\n[calling {event.name}]")
+    elif isinstance(event, Finished):
+        print(f"\n[{event.usage['total_tokens']} tokens, trace {event.trace[:8]}]")
+```
+
+| Event | Emitted |
+|---|---|
+| `Started` | Once, before the first model call |
+| `Thinking` | Before each model call, so a UI can show progress during the wait |
+| `TextChunk` | Assistant text |
+| `ToolCalled` | The model asked for a tool, which is about to run |
+| `ToolFinished` | A tool returned, or failed |
+| `StepFinished` | One pass of the loop completed, with its token usage |
+| `Finished` | Last. Carries the same `AgentRun` that `run()` returns |
+| `Failed` | The loop raised; the exception follows |
+
+`stream()` and `run()` share **one** loop implementation, so they can never
+disagree about what the agent did. Every event has a `.kind` (a stable snake_case
+name) and a `.describe()` returning a JSON-safe payload.
+
+### Over HTTP
+
+```python
+urlpatterns = [
+    path("chat/", Support.as_endpoint()),
+    path("chat/stream/", Support.as_stream_endpoint()),
+]
+```
+
+The streaming endpoint speaks `text/event-stream`, which browsers consume
+natively:
+
+```javascript
+const response = await fetch("/api/chat/stream/", {
+  method: "POST",
+  headers: {"Content-Type": "application/json"},
+  body: JSON.stringify({message: "How do I rotate an API key?"}),
+});
+
+const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+while (true) {
+  const {value, done} = await reader.read();
+  if (done) break;
+  // lines of "event: <kind>" and "data: <json>"
+}
+```
+
 ## Tracing
 
 Every model call and tool call becomes an ordered span under one trace, so "why
