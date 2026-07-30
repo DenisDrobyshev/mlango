@@ -365,35 +365,10 @@ class TestProviders:
         with pytest.raises(ImproperlyConfigured, match="Available:"):
             get_provider("nope")
 
-    def test_anthropic_provider_drops_sampling_parameters(self, monkeypatch, project):
-        """Current Claude models 400 on temperature/top_p/top_k."""
-        pytest.importorskip("anthropic")
-        from mlango.agents.providers.anthropic import AnthropicProvider
-
-        captured: dict = {}
-
-        class FakeMessages:
-            def create(self, **payload):
-                captured.update(payload)
-                raise RuntimeError("stop here")
-
-        class FakeClient:
-            messages = FakeMessages()
-
-        provider = AnthropicProvider()
-        provider._client = FakeClient()
-
-        with pytest.raises(RuntimeError, match="stop here"):
-            provider.complete(
-                model="claude-opus-5",
-                messages=[{"role": "user", "content": "hi"}],
-                temperature=0.7,
-                top_p=0.9,
-            )
-
-        assert "temperature" not in captured
-        assert "top_p" not in captured
-        assert captured["thinking"] == {"type": "adaptive"}
+    # The Anthropic provider is covered in tests/test_anthropic_provider.py,
+    # against a stand-in for the SDK. The test that used to live here began with
+    # importorskip("anthropic"), so it was skipped locally and in CI alike —
+    # which is how this provider ended up the least covered file in the project.
 
     def test_refusal_is_surfaced(self, project):
         from mlango.agents.providers.base import Completion, Usage

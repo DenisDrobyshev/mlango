@@ -116,8 +116,30 @@ build:
     paths: [dist/]
     expire_in: 2 weeks
 
+pages:
+  # GitLab Pages hosts the site even while the project is private: with Pages
+  # access control it is served to project members only. GitHub Pages cannot do
+  # that without a paid plan, which is why the GitHub workflow only publishes
+  # once the repository is public and this job is the one that actually serves
+  # the documentation today.
+  #
+  # Turn it on under Settings -> Pages after the first run. The name of this job
+  # and the `public/` directory are both fixed by GitLab, not chosen here.
+  stage: verify
+  script:
+    - pip install mkdocs-material mkdocs-static-i18n
+    - mkdocs build --strict --site-dir public
+  artifacts:
+    paths: [public/]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
 docs:
   stage: verify
+  # Still built on every branch and merge request: --strict is what catches a
+  # broken link, and that check should not wait for the default branch.
+  rules:
+    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
   script:
     - pip install mkdocs-material mkdocs-static-i18n
     - mkdocs build --strict
