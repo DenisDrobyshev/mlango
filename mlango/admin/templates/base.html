@@ -5,146 +5,291 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ site_title }}{% endblock %}</title>
 <style>
+/*
+ * The palette and the furniture are Django's admin, on purpose.
+ *
+ * The whole pitch is "Django for ML", and a Django developer should recognise
+ * this interface before reading a word of it: the #417690 header, the #79aec8
+ * breadcrumb strip under it, modules with a coloured caption bar, the yellow
+ * accent. Familiarity here is a feature, not decoration.
+ *
+ * Still no build step, no CDN and no JavaScript framework. One stylesheet,
+ * server-rendered HTML, inline SVG for the charts.
+ */
 :root {
   color-scheme: light dark;
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --ink: #16181d;
-  --muted: #6b7280;
-  --line: #e3e6ea;
-  --accent: #2f6f4f;
-  --accent-soft: #e7f2ec;
-  --warn: #b45309;
-  --bad: #b4232c;
-  --good: #2f6f4f;
-  --radius: 10px;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --primary: #79aec8;
+  --secondary: #417690;
+  --accent: #f5dd5d;
+
+  --body-fg: #303030;
+  --body-bg: #fff;
+  --body-quiet-color: #666;
+  --body-loud-color: #000;
+
+  --header-color: #ffc;
+  --header-branding-color: var(--accent);
+  --header-bg: var(--secondary);
+  --header-link-color: var(--primary);
+
+  --breadcrumbs-fg: #c4dce8;
+  --breadcrumbs-link-fg: var(--body-bg);
+  --breadcrumbs-bg: var(--primary);
+
+  --link-fg: #417893;
+  --link-hover-color: #036;
+
+  --hairline-color: #e8e8e8;
+  --border-color: #ccc;
+
+  --darkened-bg: #f8f8f8;
+  --selected-bg: #e4e4e4;
+  --selected-row: #ffc;
+
+  --message-success-bg: #dfd;
+  --message-warning-bg: #ffc;
+  --message-error-bg: #ffefef;
+
+  --good: #2c7a3f;
+  --warn: #9a6700;
+  --bad: #ba2121;
+
+  --font-family-primary: "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
+  --font-family-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101214;
-    --panel: #181b1f;
-    --ink: #e8eaed;
-    --muted: #9aa2ad;
-    --line: #2a2f36;
-    --accent: #6fcf97;
-    --accent-soft: #1c2b23;
+    --primary: #264b5d;
+    --primary-fg: #f7f7f7;
+    --body-fg: #eeeeee;
+    --body-bg: #121212;
+    --body-quiet-color: #e0e0e0;
+    --body-loud-color: #ffffff;
+
+    --breadcrumbs-link-fg: #e0e0e0;
+    --breadcrumbs-bg: var(--primary);
+
+    --link-fg: #81d4fa;
+    --link-hover-color: #4ac1f7;
+
+    --hairline-color: #272727;
+    --border-color: #353535;
+
+    --darkened-bg: #212121;
+    --selected-bg: #1b1b1b;
+    --selected-row: #00363a;
+
+    --message-success-bg: #006b1b;
+    --message-warning-bg: #583305;
+    --message-error-bg: #570808;
+
+    --good: #7fce8f;
     --warn: #e0a458;
     --bad: #e57373;
-    --good: #6fcf97;
   }
 }
+
 * { box-sizing: border-box; }
+html { height: 100%; }
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--body-bg);
+  color: var(--body-fg);
+  font: 14px/1.55 var(--font-family-primary);
 }
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-code, .mono { font-family: var(--mono); font-size: 0.88em; }
+a { color: var(--link-fg); text-decoration: none; }
+a:hover, a:focus { color: var(--link-hover-color); text-decoration: underline; }
+code, .mono { font-family: var(--font-family-monospace); font-size: 0.88em; }
 
-header.top {
-  background: var(--accent);
-  color: #fff;
-  padding: 0.85rem 1.25rem;
+/* ---- header ------------------------------------------------------------ */
+
+#header {
+  background: var(--header-bg);
+  color: var(--header-color);
+  padding: 10px 40px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  overflow: hidden;
 }
-header.top a { color: #fff; }
-header.top .brand { font-weight: 650; font-size: 1.05rem; letter-spacing: 0.01em; }
-header.top .ver { opacity: 0.75; font-size: 0.78rem; }
-header.top nav { margin-left: auto; display: flex; gap: 1rem; font-size: 0.9rem; }
+#branding { display: flex; align-items: baseline; gap: 0.6rem; }
+#site-name { margin: 0; font-weight: 300; font-size: 18px; }
+#site-name a { color: var(--header-branding-color); text-decoration: none; }
+#site-name a:hover { color: var(--header-branding-color); text-decoration: none; }
+.version { font-size: 11px; opacity: 0.8; }
+#user-tools { margin-left: auto; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; gap: 1rem; }
+#user-tools a { color: var(--header-link-color); border-bottom: 1px solid rgba(255, 255, 255, 0.25); }
+#user-tools a:hover { color: var(--header-color); text-decoration: none; }
 
-.layout { display: flex; align-items: flex-start; gap: 1.25rem; padding: 1.25rem; max-width: 1500px; margin: 0 auto; }
-aside {
-  flex: 0 0 232px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.9rem;
-  position: sticky;
-  top: 1.25rem;
+/* ---- breadcrumbs ------------------------------------------------------- */
+
+div.breadcrumbs {
+  background: var(--breadcrumbs-bg);
+  padding: 10px 40px;
+  border: none;
+  color: var(--breadcrumbs-fg);
+  font-size: 14px;
 }
-aside h3 { margin: 0.85rem 0 0.35rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
-aside h3:first-child { margin-top: 0; }
-aside ul { list-style: none; margin: 0 0 0.4rem; padding: 0; }
-aside li a { display: block; padding: 0.18rem 0.4rem; border-radius: 6px; font-size: 0.9rem; }
-aside li a:hover { background: var(--accent-soft); text-decoration: none; }
-main { flex: 1 1 auto; min-width: 0; }
+div.breadcrumbs a { color: var(--breadcrumbs-link-fg); }
+div.breadcrumbs a:focus, div.breadcrumbs a:hover { color: var(--breadcrumbs-fg); text-decoration: none; }
 
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem 1.25rem; margin-bottom: 1.1rem; }
-.card h2 { margin: 0 0 0.75rem; font-size: 1.02rem; }
-.card h2 .count { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
+/* ---- layout ------------------------------------------------------------ */
 
-h1 { font-size: 1.4rem; margin: 0 0 0.3rem; }
-.subtitle { color: var(--muted); margin: 0 0 1.1rem; font-size: 0.92rem; }
+.layout { display: flex; align-items: flex-start; gap: 0; }
+#nav-sidebar {
+  flex: 0 0 275px;
+  background: var(--darkened-bg);
+  border-right: 1px solid var(--hairline-color);
+  padding: 0 0 2rem;
+  min-height: 60vh;
+}
+#nav-sidebar h3 {
+  margin: 0;
+  padding: 8px 16px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+#nav-sidebar ul { list-style: none; margin: 0; padding: 0; }
+#nav-sidebar li a {
+  display: block;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--hairline-color);
+  font-size: 0.9rem;
+}
+#nav-sidebar li a:hover { background: var(--selected-bg); text-decoration: none; }
+#content { flex: 1 1 auto; min-width: 0; padding: 20px 40px; }
 
-.grid { display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.9rem 1rem; }
-.stat .n { font-size: 1.7rem; font-weight: 620; line-height: 1.1; }
-.stat .k { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.07em; }
+h1 { font-size: 20px; font-weight: 400; margin: 0 0 20px; color: var(--body-loud-color); }
+.subtitle { color: var(--body-quiet-color); margin: -14px 0 20px; font-size: 0.92rem; }
 
-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+/* ---- modules ----------------------------------------------------------- */
+
+.card, .module {
+  background: var(--body-bg);
+  border: 1px solid var(--hairline-color);
+  margin-bottom: 20px;
+  padding: 0;
+}
+.card > h2, .module > h2 {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.card > h2 a, .module > h2 a { color: #fff; text-decoration: underline; }
+.card > h2 .count { text-transform: none; letter-spacing: 0; opacity: 0.85; font-size: 0.8rem; }
+.card > *:not(h2) { margin-left: 12px; margin-right: 12px; }
+.card > table, .card > .scroll { margin-left: 0; margin-right: 0; }
+.card > *:last-child { margin-bottom: 12px; }
+
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 20px; }
+.stat { background: var(--body-bg); border: 1px solid var(--hairline-color); padding: 12px 14px; }
+.stat .n { font-size: 26px; font-weight: 300; line-height: 1.1; color: var(--body-loud-color); }
+.stat .k { color: var(--body-quiet-color); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ---- tables ------------------------------------------------------------ */
+
+table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
 .scroll { overflow-x: auto; }
-th, td { text-align: left; padding: 0.48rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; white-space: nowrap; }
-tbody tr:hover { background: var(--accent-soft); }
-td.num { text-align: right; font-family: var(--mono); white-space: nowrap; }
-
-.tag { display: inline-block; padding: 0.08rem 0.45rem; border-radius: 999px; font-size: 0.72rem; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
-.tag.ok, .tag.finished, .tag.production { color: var(--good); border-color: var(--good); }
-.tag.failed, .tag.bad { color: var(--bad); border-color: var(--bad); }
-.tag.running, .tag.staging { color: var(--warn); border-color: var(--warn); }
-
-form.filters { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.9rem; }
-label.field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-input, select, button {
-  font: inherit; padding: 0.34rem 0.5rem; border-radius: 7px;
-  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+thead th {
+  background: var(--darkened-bg);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--body-quiet-color);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
-button { cursor: pointer; border-color: var(--accent); color: var(--accent); font-size: 0.86rem; }
-button:hover { background: var(--accent-soft); }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--hairline-color); vertical-align: top; }
+tbody tr:nth-child(odd) { background: var(--darkened-bg); }
+tbody tr:hover { background: var(--selected-row); }
+td.num { text-align: right; font-family: var(--font-family-monospace); white-space: nowrap; }
+.result-count { color: var(--body-quiet-color); font-size: 0.82rem; padding: 8px 0; }
+
+/* ---- widgets ----------------------------------------------------------- */
+
+.tag {
+  display: inline-block; padding: 2px 7px; border-radius: 3px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+  background: var(--darkened-bg); border: 1px solid var(--border-color);
+  color: var(--body-quiet-color); white-space: nowrap;
+}
+.tag.ok, .tag.finished, .tag.production { color: #fff; background: var(--good); border-color: var(--good); }
+.tag.failed, .tag.bad { color: #fff; background: var(--bad); border-color: var(--bad); }
+.tag.running, .tag.staging { color: #fff; background: var(--warn); border-color: var(--warn); }
+
+form.filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin: 0 0 14px; }
+label.field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--body-quiet-color); }
+input, select, button {
+  font: inherit; padding: 5px 8px;
+  border: 1px solid var(--border-color); border-radius: 4px;
+  background: var(--body-bg); color: var(--body-fg);
+}
+button {
+  cursor: pointer; background: var(--secondary); color: #fff;
+  border-color: var(--secondary); font-size: 0.85rem; padding: 6px 12px;
+}
+button:hover { background: var(--link-hover-color); border-color: var(--link-hover-color); }
 
 .chart { width: 100%; height: auto; max-width: 460px; }
-.chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
-.chart-area { fill: var(--accent); opacity: 0.12; stroke: none; }
-.charts { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-.charts figcaption { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+.chart-line { fill: none; stroke: var(--secondary); stroke-width: 2; stroke-linejoin: round; }
+.chart-area { fill: var(--primary); opacity: 0.3; stroke: none; }
+.charts { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.charts figcaption { font-size: 0.8rem; color: var(--body-quiet-color); margin-top: 4px; }
 
-dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; margin: 0; font-size: 0.9rem; }
-dl.kv dt { color: var(--muted); }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 20px; margin: 12px 0; font-size: 0.88rem; }
+dl.kv dt { color: var(--body-quiet-color); }
 dl.kv dd { margin: 0; word-break: break-word; }
 
-pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 0.7rem; overflow-x: auto; font-size: 0.82rem; margin: 0.4rem 0 0; }
+pre { background: var(--darkened-bg); border: 1px solid var(--hairline-color); padding: 10px; overflow-x: auto; font-size: 0.82rem; margin: 6px 0 0; }
 
-.span-row { display: grid; grid-template-columns: 150px 1fr 90px; gap: 0.6rem; align-items: center; padding: 0.3rem 0; border-bottom: 1px solid var(--line); font-size: 0.86rem; }
-.bar { height: 9px; background: var(--accent); border-radius: 999px; opacity: 0.65; }
+.span-row { display: grid; grid-template-columns: 150px 1fr 90px; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--hairline-color); font-size: 0.86rem; }
+.bar { height: 10px; background: var(--primary); }
 .bar.tool { background: var(--warn); }
 .bar.error { background: var(--bad); }
 
-.empty { color: var(--muted); font-style: italic; padding: 0.5rem 0; }
-.pager { display: flex; gap: 0.7rem; margin-top: 0.8rem; font-size: 0.88rem; }
-footer { text-align: center; color: var(--muted); font-size: 0.78rem; padding: 1.5rem 0 2.5rem; }
+.empty { color: var(--body-quiet-color); font-style: italic; padding: 10px 0; }
+.pager { display: flex; gap: 12px; margin-top: 12px; font-size: 0.88rem; }
+#footer { text-align: center; color: var(--body-quiet-color); font-size: 11px; padding: 24px 0 40px; }
+
+@media (max-width: 900px) {
+  #header, div.breadcrumbs, #content { padding-left: 16px; padding-right: 16px; }
+  .layout { flex-direction: column; }
+  #nav-sidebar { flex: 1 1 auto; width: 100%; border-right: none; border-bottom: 1px solid var(--hairline-color); min-height: 0; }
+}
 </style>
 </head>
 <body>
-<header class="top">
-  <span class="brand"><a href="{{ admin_url }}/">{{ site_header }}</a></span>
-  <span class="ver">v{{ version }}</span>
-  <nav>
+<header id="header">
+  <div id="branding">
+    <h1 id="site-name"><a href="{{ admin_url }}/">{{ site_header }}</a></h1>
+    <span class="version">v{{ version }}</span>
+  </div>
+  <div id="user-tools">
     <a href="{{ admin_url }}/runs">Runs</a>
     <a href="{{ admin_url }}/traces">Traces</a>
     <a href="{{ admin_url }}/versions">Versions</a>
     <a href="/api/docs">API docs</a>
-  </nav>
+  </div>
 </header>
 
+<div class="breadcrumbs">
+  <a href="{{ admin_url }}/">Home</a>{% block breadcrumbs %}{% endblock %}
+</div>
+
 <div class="layout">
-  <aside>
+  <nav id="nav-sidebar">
     {% for app in app_list %}
       <h3>{{ app.name }}</h3>
       {% for group in app.kinds %}
@@ -156,13 +301,13 @@ footer { text-align: center; color: var(--muted); font-size: 0.78rem; padding: 1
       {% endfor %}
     {% else %}
       <h3>No apps</h3>
-      <p class="empty">Add an app to <code>INSTALLED_APPS</code>.</p>
+      <p class="empty" style="padding: 12px 16px;">Add an app to <code>INSTALLED_APPS</code>.</p>
     {% endfor %}
-  </aside>
+  </nav>
 
-  <main>
+  <main id="content">
     {% block content %}{% endblock %}
-    <footer>mlango {{ version }} — a Django-shaped framework for ML and agents</footer>
+    <div id="footer">mlango {{ version }} · a Django-shaped framework for ML and agents</div>
   </main>
 </div>
 </body>

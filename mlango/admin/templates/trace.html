@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block breadcrumbs %} &rsaquo; <a href="{{ admin_url }}/traces">Traces</a> &rsaquo; {{ trace.short_id }}{% endblock %}
 {% block title %}Trace {{ trace.short_id }} — {{ site_title }}{% endblock %}
 
 {% block content %}

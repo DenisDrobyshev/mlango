@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block breadcrumbs %} &rsaquo; {{ opts.app_label }} &rsaquo; {{ opts.verbose_name_plural }}{% endblock %}
 {% block title %}{{ opts.label }} — {{ site_title }}{% endblock %}
 
 {% block content %}
