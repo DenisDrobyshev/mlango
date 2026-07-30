@@ -43,6 +43,49 @@ def _as_matrix(inputs: list[Any], features: list[str] | None = None) -> Any:
     return np.asarray([[record.get(column) for column in columns] for record in inputs])
 
 
+def _declared_classes(model) -> list[Any] | None:
+    """The target's declared classes, in the order they were declared.
+
+    ``LabelField.classes`` says it "doubles as the class ordering used when
+    encoding to indices, so training and serving agree on what index 0 means".
+    This is what makes that true.
+    """
+    try:
+        dataset_class = model.get_dataset()
+        field = dataset_class._meta.get_field(model.get_target(dataset_class))
+    except Exception:  # noqa: BLE001 - an incomplete declaration must still train
+        return None
+    classes = getattr(field, "classes", None)
+    return list(classes) if classes else None
+
+
+def _encode(values: list[Any], classes: list[Any]) -> list[Any]:
+    """Class values to indices, leaving anything unrecognised alone.
+
+    scikit-learn's own estimators accept string labels, but XGBoost, LightGBM
+    and CatBoost reject them with a message about "invalid classes inferred
+    from unique values of y" that mentions neither mlango nor what to do about
+    it. Encoding here makes every sklearn-compatible estimator work with a
+    declared LabelField, which is the whole point of declaring one.
+    """
+    lookup = {value: index for index, value in enumerate(classes)}
+    return [lookup.get(value, value) for value in values]
+
+
+def _decode(values: Any, classes: list[Any]) -> list[Any]:
+    """Indices back to the declared class values."""
+    out = []
+    for value in values:
+        index = _python(value)
+        if isinstance(index, bool) or not isinstance(index, int):
+            out.append(index)
+        elif 0 <= index < len(classes):
+            out.append(classes[index])
+        else:
+            out.append(index)
+    return out
+
+
 def _features_of(model) -> list[str] | None:
     """The model's declared features, or None if the declaration cannot say.
 
@@ -91,7 +134,9 @@ class SklearnTrainer(Trainer):
         epoch_started.send(sender=type(model), run=run, epoch=0)
         callbacks.emit("on_epoch_begin", run, 0, model=model)
 
-        estimator.fit(_as_matrix(x_train, features), y_train)
+        classes = _declared_classes(model)
+        fit_targets = _encode(y_train, classes) if classes else y_train
+        estimator.fit(_as_matrix(x_train, features), fit_targets)
 
         epoch_metrics = self._epoch_metrics(model, estimator, train, validation, target, features)
         # Recording metrics is the framework's job, not a callback's: a user who
@@ -114,19 +159,24 @@ class SklearnTrainer(Trainer):
     ) -> dict[str, float]:
         task = model.get_task()
         out: dict[str, float] = {}
+        classes = _declared_classes(model)
 
-        x_train, y_train = train.xy(target=target or None, features=features)
-        train_report = metric_lib.report_for_task(
-            task, y_train, estimator.predict(_as_matrix(x_train, features))
-        )
+        def scored(query) -> Any:
+            """Predictions in the same vocabulary as the truth they are scored against."""
+            x, y = query.xy(target=target or None, features=features)
+            if not x:
+                return None, None
+            raw = estimator.predict(_as_matrix(x, features))
+            return y, (_decode(raw, classes) if classes else [_python(v) for v in raw])
+
+        y_train, train_predictions = scored(train)
+        train_report = metric_lib.report_for_task(task, y_train, train_predictions)
         out.update({f"train_{k}": v for k, v in metric_lib.flatten_report(train_report).items()})
 
         if validation is not None:
-            x_val, y_val = validation.xy(target=target or None, features=features)
-            if x_val:
-                val_report = metric_lib.report_for_task(
-                    task, y_val, estimator.predict(_as_matrix(x_val, features))
-                )
+            y_val, val_predictions = scored(validation)
+            if y_val is not None:
+                val_report = metric_lib.report_for_task(task, y_val, val_predictions)
                 flattened = metric_lib.flatten_report(val_report)
                 out.update({f"val_{k}": v for k, v in flattened.items()})
                 # Give EarlyStopping something to monitor for regression too.
@@ -140,13 +190,20 @@ class SklearnTrainer(Trainer):
     # -- inference -----------------------------------------------------------
 
     def predict(self, model, fitted, inputs: list[Any]) -> list[Any]:
+        declared = _declared_classes(model)
         predictions = fitted.predict(_as_matrix(inputs, _features_of(model)))
+        if declared:
+            return _decode(predictions, declared)
         return [_python(value) for value in predictions]
 
     def predict_proba(self, model, fitted, inputs: list[Any]):
         if not hasattr(fitted, "predict_proba"):
             return None
-        classes = [_python(c) for c in getattr(fitted, "classes_", [])]
+        declared = _declared_classes(model)
+        fitted_classes = [_python(c) for c in getattr(fitted, "classes_", [])]
+        # The columns are in the estimator's own class order, which is the index
+        # order when the target was encoded. Name them from the declaration.
+        classes = _decode(fitted_classes, declared) if declared else fitted_classes
         probabilities = fitted.predict_proba(_as_matrix(inputs, _features_of(model)))
         return [
             dict(zip(classes, (float(p) for p in row), strict=True))
