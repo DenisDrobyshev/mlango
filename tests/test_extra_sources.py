@@ -33,6 +33,16 @@ def parquet_file(project):
 
 
 class TestParquetSource:
+    @pytest.fixture(autouse=True)
+    def _needs_pyarrow(self):
+        """Guard the whole class, not each test that happens to write a file.
+
+        Two tests here take only ``project``, so they never touched the
+        ``parquet_file`` fixture's importorskip and failed wherever the optional
+        extra is not installed — which is every CI job except the Parquet one.
+        """
+        pytest.importorskip("pyarrow.parquet")
+
     def test_reads_every_row(self, parquet_file):
         source = ParquetSource(str(parquet_file))
         rows = list(source)

@@ -18,6 +18,11 @@ jobs:
   analyze:
     name: Analyze Python
     runs-on: ubuntu-latest
+    # Uploading results needs code scanning, which on a private repository
+    # requires GitHub Advanced Security. Without it the analyze step fails on
+    # every push, so the job is skipped rather than left permanently red — and
+    # it starts running by itself the moment the repository becomes public.
+    if: github.event.repository.visibility == 'public'
     permissions:
       security-events: write
       actions: read

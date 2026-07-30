@@ -153,6 +153,15 @@ no_implicit_optional = true
 module = ["mlango.core.base", "mlango.core.options"]
 disable_error_code = ["attr-defined"]
 
+[[tool.mypy.overrides]]
+# python_version above is 3.10 on purpose — it is what catches syntax we cannot
+# ship. But it also makes mypy parse third-party stubs as 3.10, and numpy's use
+# `type` statements that only exist in 3.12. Their stubs are not ours to fix, and
+# the error says nothing about this codebase, so skip following them.
+module = ["numpy.*", "pandas.*", "sklearn.*", "torch.*", "transformers.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true
+
 [tool.coverage.run]
 source = ["mlango"]
 omit = ["*/__main__.py"]

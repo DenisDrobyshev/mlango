@@ -20,6 +20,7 @@ concurrency:
 
 jobs:
   build:
+    name: Build the site
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,14 +29,26 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install mkdocs-material mkdocs-static-i18n
+
+      # Always built, even while the site cannot be published: --strict is what
+      # catches a broken link or a missing translation, and that check is worth
+      # having on every push regardless of where the output goes.
       - run: mkdocs build --strict
+
+      # Pages needs enabling on the repository, which a private repository
+      # cannot do without a paid plan. Skipped rather than left failing; it
+      # begins publishing on its own once the repository is public.
       - uses: actions/configure-pages@v5
+        if: github.event.repository.visibility == 'public'
       - uses: actions/upload-pages-artifact@v3
+        if: github.event.repository.visibility == 'public'
         with:
           path: site
 
   deploy:
+    name: Deploy to Pages
     needs: build
+    if: github.event.repository.visibility == 'public'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
