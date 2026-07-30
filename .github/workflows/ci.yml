@@ -114,11 +114,15 @@ jobs:
       # what the lockfile claims. Advisories appear against transitive
       # dependencies far more often than direct ones.
       #
-      # --skip-editable leaves out mlango itself: it is installed from this
-      # checkout, so it has no PyPI release to compare against and pip-audit
-      # treats "not found on PyPI" as a failure.
+      # --skip-editable leaves out mlango itself, which is installed from this
+      # checkout and so has no release to compare against. --strict cannot be
+      # combined with it: strict treats any dependency it could not audit as a
+      # failure, including the one we deliberately skipped. The trade is that a
+      # third-party package missing from PyPI would be passed over silently
+      # rather than failing the build; a real advisory still fails it, which is
+      # what this job is for.
       - name: pip-audit
-        run: pip-audit --strict --desc --skip-editable
+        run: pip-audit --desc --skip-editable
 
   quickstart:
     name: Scaffolded project works end to end
