@@ -25,8 +25,22 @@ GITHUB = ROOT / ".github" / "workflows" / "ci.yml"
 GITLAB = ROOT / ".gitlab-ci.yml"
 
 
+class _Loader(yaml.SafeLoader):
+    """SafeLoader that tolerates mkdocs' Python-callable tags.
+
+    mkdocs.yml legitimately carries ``!!python/name:...`` to wire up the mermaid
+    fence. Reading it is not executing it, so the tag becomes its own name and
+    the rest of the document parses.
+    """
+
+
+_Loader.add_multi_constructor(
+    "tag:yaml.org,2002:python/name:", lambda loader, suffix, node: suffix
+)
+
+
 def _load(path: pathlib.Path) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    return yaml.load(path.read_text(encoding="utf-8"), Loader=_Loader)
 
 
 def _github_commands() -> str:
@@ -257,6 +271,56 @@ class TestReadme:
     def test_both_show_the_install_command(self, readmes):
         for name, text in readmes.items():
             assert 'pip install "mlango[sklearn]"' in text, name
+
+
+class TestDocumentation:
+    """The project claims complete English and Russian documentation.
+
+    That claim slipped twice while pages were being added, both times
+    unnoticed, because an untranslated page falls back to English and nothing
+    visibly breaks. These make it visible.
+    """
+
+    @pytest.fixture(scope="class")
+    def pages(self) -> tuple[set[str], set[str]]:
+        docs = ROOT / "docs"
+        english = {p.stem for p in docs.glob("*.md") if ".ru." not in p.name}
+        russian = {p.name[: -len(".ru.md")] for p in docs.glob("*.ru.md")}
+        return english, russian
+
+    def test_every_page_exists_in_both_languages(self, pages):
+        english, russian = pages
+        assert not english - russian, f"no Russian: {sorted(english - russian)}"
+        assert not russian - english, f"no English: {sorted(russian - english)}"
+
+    def test_every_page_is_in_the_navigation(self, pages):
+        english, _ = pages
+        nav = yaml.safe_dump(_load(ROOT / "mkdocs.yml")["nav"])
+        missing = [name for name in english if f"{name}.md" not in nav]
+        assert not missing, f"written but unreachable: {sorted(missing)}"
+
+    def test_the_navigation_labels_are_all_translated(self):
+        config = _load(ROOT / "mkdocs.yml")
+        russian = next(
+            locale for locale in config["plugins"][1]["i18n"]["languages"]
+            if locale["locale"] == "ru"
+        )
+        translated = set(russian["nav_translations"])
+
+        labels: set[str] = set()
+        for section in config["nav"]:
+            for heading, entries in section.items():
+                labels.add(heading)
+                labels.update(k for entry in entries for k in entry)
+
+        assert not labels - translated, f"untranslated labels: {sorted(labels - translated)}"
+
+    def test_both_readmes_explain_the_architecture(self):
+        """It is the question a reader has before any feature list."""
+        for name in ("README.md", "README.ru.md"):
+            text = (ROOT / name).read_text(encoding="utf-8")
+            assert "_meta" in text, name
+            assert "manage.py train" in text, name
 
 
 class TestGitLabSpecific:

@@ -290,6 +290,76 @@ schema, the admin and the CLI. Being a framework is what removes them.
 
 ---
 
+## How it works
+
+Everything follows from one idea: **your class body is compiled into metadata,
+and every generic subsystem reads that metadata instead of knowing about your
+class.**
+
+```
+          your class body                    what reads it
+    ┌──────────────────────────┐
+    │  class Sentiment(Model): │           ┌──────────────► Admin page
+    │      C = FloatField(…)   │           │
+    │                          │           ├──────────────► POST /api/predict/
+    │      class Meta:         │  ────►  _meta               + OpenAPI schema
+    │          dataset = …     │        (Options)  │
+    │          trainer  = …    │           ├──────────────► Migration file
+    │                          │           │
+    │      def build(self): …  │           ├──────────────► manage.py train
+    └──────────────────────────┘           │                manage.py sweep
+                                           └──────────────► Eval + model registry
+```
+
+Nothing on the right imports `Model`, `Dataset`, `Agent` or `Eval`. They all read
+`_meta`, which is why one admin renders four different families and why adding a
+fifth would not mean touching the admin.
+
+### The layers
+
+```
+  core            fields · metaclass · Options · registry · settings · signals
+    │             (imports nothing else in mlango)
+    ├── metastore   9 tables: runs, metrics, artifacts, versions, traces, spans…
+    ├── storage     artifacts, behind one narrow interface
+    │
+    ├── data ─────┐
+    ├── training ─┤  the four families. They never import each other.
+    ├── agents ───┤
+    ├── evals ────┘
+    │
+    └── admin · serve · management     read everything, but only through _meta
+```
+
+The rule that matters most is the middle one. The four families not importing
+each other is what lets you use the agent half without the ML half, and why a
+project declaring only datasets never loads a line of agent code.
+
+### What `manage.py train` actually does
+
+```
+  train reviews.Sentiment -p C=2.0
+        │
+        ├─ load settings, autodiscover every app's declarations
+        ├─ resolve the label in the registry
+        ├─ build the instance — fields validate C=2.0
+        ├─ open a run: seed, device, git commit, host, Python version
+        ├─ split the data by hashing each record's key, record the fingerprint
+        ├─ call your build(), drive the loop, log metrics each epoch
+        ├─ save the artifact and register a promotable version
+        └─ close the run
+```
+
+You wrote `build()` and four field declarations. Everything else happens whether
+you remembered it or not, which is the whole argument for a framework.
+
+**[Architecture](https://drobyshevdev.github.io/mlango/architecture/)** has the
+full picture: sequence diagrams, the metastore schema, every extension point and
+its contract. **[Philosophy](https://drobyshevdev.github.io/mlango/philosophy/)**
+explains the decisions behind it.
+
+---
+
 ## Documentation
 
 Full docs, including a tutorial that builds a project end to end:
