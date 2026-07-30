@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import FastAPI, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -22,6 +23,33 @@ from mlango.admin.sites import site as default_site
 logger = logging.getLogger("mlango.admin")
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+
+
+def _template_dirs() -> list[str]:
+    """Where to look for admin templates, project first.
+
+    Jinja2 searches these in order, so dropping ``base.html`` into a project's
+    own admin template directory replaces the shipped one and leaves the other
+    nine alone. That is how Django's admin has always been customised, and it
+    is the difference between a theme you can change and one you have to fork.
+
+    The framework's directory is always last, so an override can never make a
+    page disappear: whatever the project does not provide still resolves.
+    """
+    from mlango.conf import settings
+
+    dirs: list[str] = []
+    for entry in getattr(settings, "ADMIN_TEMPLATE_DIRS", []) or []:
+        path = str(entry)
+        resolved = path if os.path.isabs(path) else os.path.join(str(settings.BASE_DIR), path)
+        # Normalised, so a setting written with forward slashes does not leave
+        # mixed separators in the loader's search path on Windows.
+        resolved = os.path.normpath(resolved)
+        if os.path.isdir(resolved) and resolved not in dirs:
+            dirs.append(resolved)
+
+    dirs.append(TEMPLATE_DIR)
+    return dirs
 
 
 def build_admin_app(site: AdminSite | None = None) -> FastAPI:
@@ -42,7 +70,7 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
             "the admin behind your identity provider."
         )
 
-    templates = Jinja2Templates(directory=TEMPLATE_DIR)
+    templates = Jinja2Templates(directory=_template_dirs())
     templates.env.filters["short"] = _short
     templates.env.filters["duration"] = _duration
     templates.env.filters["number"] = _number
@@ -99,6 +127,8 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
         request: Request,
         label: str,
         q: str = Query(default=""),
+        period: str = Query(default=""),
+        message: str = Query(default=""),
         page_no: int = Query(default=1, alias="page", ge=1),
     ) -> HTMLResponse:
         try:
@@ -122,10 +152,14 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
             "filter_values": {n: entry.filter_values(n) for n in entry.get_list_filter()},
             "columns": entry.get_list_display(),
             "page_no": page_no,
+            "period": period,
+            "periods": entry.date_periods(),
+            "actions": entry.get_actions(),
+            "message": message,
         }
 
         if entry.kind == "dataset":
-            context.update(_dataset_page(entry, q, filters, page_no))
+            context.update(_dataset_page(entry, q, filters, page_no, period))
         elif entry.kind == "model":
             context["versions"] = _model_versions(label=label)
             context["runs"] = _runs_for(label)
@@ -248,6 +282,43 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
             stages=Stage.ALL,
         )
 
+    @app.post("/o/{label}/action")
+    def object_action(
+        request: Request,
+        label: str,
+        action: str = Form(...),
+        selected: list[str] = Form(default=[]),
+    ) -> RedirectResponse:
+        """Run one admin action over the selected rows.
+
+        Django's changelist actions, with the same shape: pick rows, pick an
+        action, apply. A redirect afterwards so a refresh does not run it twice.
+        """
+        from mlango.core.exceptions import MlangoError
+
+        try:
+            entry = site.get(label)
+        except LookupError:
+            return RedirectResponse(str(request.url_for("index")), status_code=303)
+
+        keys = {str(value) for value in selected}
+        primary_key = entry.opts.extras.get("primary_key")
+        try:
+            records = [
+                record
+                for record in entry.get_queryset().take(entry.preview_limit)
+                if primary_key and str(record.get(primary_key)) in keys
+            ]
+            message = entry.run_action(action, records)
+        except MlangoError as exc:
+            message = f"Failed: {exc}"
+        except Exception as exc:  # noqa: BLE001 - the admin reports, it does not 500
+            logger.exception("Admin action %s on %s failed", action, label)
+            message = f"Failed: {exc}"
+
+        target = request.url_for("object_detail", label=label)
+        return RedirectResponse(f"{target}?message={quote(message)}", status_code=303)
+
     @app.post("/versions/{version_id}/promote")
     def promote(request: Request, version_id: int, stage: str = Form(...)) -> RedirectResponse:
         from mlango.core.registry import apps
@@ -274,10 +345,12 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
 # --------------------------------------------------------------------------- #
 
 
-def _dataset_page(entry: Any, search: str, filters: dict[str, str], page_no: int) -> dict[str, Any]:
+def _dataset_page(
+    entry: Any, search: str, filters: dict[str, str], page_no: int, period: str = ""
+) -> dict[str, Any]:
     per_page = entry.list_per_page
     try:
-        query = entry.filtered(search=search, filters=filters)
+        query = entry.filtered(search=search, filters=filters, period=period)
         rows = list(query.skip((page_no - 1) * per_page).take(per_page + 1))
         has_next = len(rows) > per_page
         return {

@@ -103,6 +103,13 @@ ADMIN_SITE_HEADER: str = "mlango administration"
 ADMIN_SITE_TITLE: str = "mlango"
 ADMIN_PAGE_SIZE: int = 25
 
+#: Directories searched for admin templates before the framework's own, so a
+#: project can replace any of them by name. A file at
+#: ``<BASE_DIR>/templates/admin/base.html`` overrides the shipped base.html and
+#: nothing else, the way Django's admin has always worked. Relative paths
+#: resolve against BASE_DIR.
+ADMIN_TEMPLATE_DIRS: list[str] = ["templates/admin"]
+
 #: Set a password to require HTTP Basic auth on the admin. Empty means the
 #: admin is unauthenticated, which is fine locally and never fine in public.
 #: For real deployments, put the admin behind your identity provider.

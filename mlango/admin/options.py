@@ -35,10 +35,54 @@ class ObjectAdmin:
     preview_limit: int = 5000
     #: Free text shown at the top of the object's page.
     help_text: str = ""
+    #: Field whose date the preview can be drilled into, Django's
+    #: ``date_hierarchy``. Must name a DateField or DateTimeField.
+    date_hierarchy: str = ""
+    #: Names of ``action_*`` methods offered above the preview, in this order.
+    #: Empty means every ``action_*`` this class defines.
+    actions: tuple[str, ...] = ()
 
     def __init__(self, target: DeclarativeClass, site: Any):
         self.target = target
         self.site = site
+
+    # -- actions -------------------------------------------------------------
+
+    def get_actions(self) -> dict[str, str]:
+        """``{name: description}`` for the actions this admin offers.
+
+        An action is a method named ``action_<name>`` taking the selected
+        records. Its first docstring line is the label, so the thing a user
+        reads and the thing a developer reads cannot drift apart::
+
+            class ReviewsAdmin(ObjectAdmin):
+                def action_export(self, records):
+                    "Export the selected rows as JSONL"
+                    ...
+        """
+        names = self.actions or tuple(
+            sorted(n[len("action_") :] for n in dir(type(self)) if n.startswith("action_"))
+        )
+        found: dict[str, str] = {}
+        for name in names:
+            method = getattr(self, f"action_{name}", None)
+            if not callable(method):
+                continue
+            summary = (method.__doc__ or "").strip().splitlines()
+            found[name] = summary[0].strip() if summary else name.replace("_", " ").capitalize()
+        return found
+
+    def run_action(self, name: str, records: list[Any]) -> str:
+        """Run one action and return what to tell the user."""
+        from mlango.core.exceptions import FieldError
+
+        if name not in self.get_actions():
+            available = ", ".join(self.get_actions()) or "(none)"
+            raise FieldError(f"{self.label} has no admin action {name!r}. Available: {available}.")
+        outcome = getattr(self, f"action_{name}")(records)
+        if outcome:
+            return str(outcome)
+        return f"{self.get_actions()[name]}: {len(records)} row(s)."
 
     # -- naming --------------------------------------------------------------
 
@@ -106,11 +150,20 @@ class ObjectAdmin:
             query = query.order_by(*self.ordering)
         return query
 
-    def filtered(self, *, search: str = "", filters: dict[str, str] | None = None) -> Any:
+    def filtered(
+        self, *, search: str = "", filters: dict[str, str] | None = None, period: str = ""
+    ) -> Any:
         query = self.get_queryset()
         for name, value in (filters or {}).items():
             if value:
                 query = query.filter(**{name: value})
+        if period and self.date_hierarchy:
+            query = query.where(
+                lambda record, field=self.date_hierarchy, prefix=period: str(
+                    record.get(field) or ""
+                ).startswith(prefix),
+                label=f"{self.date_hierarchy}:{period}",
+            )
         if search:
             terms = self.get_search_fields()
             if terms:
@@ -122,6 +175,22 @@ class ObjectAdmin:
                     label=f"search:{search}",
                 )
         return query
+
+    def date_periods(self, *, limit: int = 24) -> list[str]:
+        """Distinct ``YYYY-MM`` prefixes for the date drill-down, newest first."""
+        if not self.date_hierarchy:
+            return []
+        try:
+            seen: set[str] = set()
+            for record in self.get_queryset().take(self.preview_limit):
+                stamp = str(record.get(self.date_hierarchy) or "")
+                if len(stamp) >= 7:
+                    seen.add(stamp[:7])
+            return sorted(seen, reverse=True)[:limit]
+        except Exception:
+            # A drill-down is a convenience; a source that cannot be scanned
+            # must not take the page down with it.
+            return []
 
     def filter_values(self, name: str, *, limit: int = 25) -> list[Any]:
         """Distinct values for a filter dropdown, from the declaration if possible."""

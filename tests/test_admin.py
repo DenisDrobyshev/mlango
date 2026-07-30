@@ -6,6 +6,8 @@ a template that raises, or one that silently drops a section, fails here.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from mlango.admin.options import AgentAdmin, DatasetAdmin, EvalAdmin, ModelAdmin, ObjectAdmin
@@ -549,6 +551,278 @@ class TestPagesWithData:
         response = client.post("/versions/1/promote", data={"stage": "production"})
         assert response.status_code in (200, 303)
         assert sentiment.versions()[0].stage == "production"
+
+
+# --------------------------------------------------------------------------- #
+# Django-shaped customisation
+# --------------------------------------------------------------------------- #
+
+
+class TestTemplateOverriding:
+    def test_the_framework_templates_are_found_by_default(self, project):
+        from mlango.admin.app import TEMPLATE_DIR, _template_dirs
+
+        assert _template_dirs() == [TEMPLATE_DIR]
+
+    def test_a_project_directory_is_searched_first(self, project):
+        """Django's admin is customised by shadowing a template, not by forking."""
+        from mlango.admin.app import TEMPLATE_DIR, _template_dirs
+
+        override = project / "templates" / "admin"
+        override.mkdir(parents=True)
+
+        dirs = _template_dirs()
+        assert dirs[0] == os.path.normpath(str(override))
+        assert dirs[-1] == TEMPLATE_DIR
+
+    def test_a_directory_that_does_not_exist_is_skipped(self, project):
+        from mlango.admin.app import TEMPLATE_DIR, _template_dirs
+        from mlango.conf import settings
+
+        settings.ADMIN_TEMPLATE_DIRS = ["nope/at/all"]
+        assert _template_dirs() == [TEMPLATE_DIR]
+
+    def test_overriding_one_template_leaves_the_rest_alone(self, project, site_with_data):
+        from fastapi.testclient import TestClient
+
+        from mlango.admin.app import build_admin_app
+
+        override = project / "templates" / "admin"
+        override.mkdir(parents=True)
+        (override / "missing.html").write_text(
+            "{% extends 'base.html' %}{% block content %}<h1>Nothing here</h1>{% endblock %}",
+            encoding="utf-8",
+        )
+
+        site, *_ = site_with_data
+        with TestClient(build_admin_app(site)) as client:
+            replaced = client.get("/runs/ffffffff")
+            assert "Nothing here" in replaced.text
+            # base.html was not overridden, so the shipped chrome still applies.
+            assert "breadcrumbs" in replaced.text
+            # And every other page still resolves from the framework's directory.
+            assert client.get("/").status_code == 200
+
+    def test_an_absolute_directory_is_accepted(self, project, tmp_path):
+        from mlango.admin.app import _template_dirs
+        from mlango.conf import settings
+
+        elsewhere = tmp_path / "shared-admin"
+        elsewhere.mkdir()
+        settings.ADMIN_TEMPLATE_DIRS = [str(elsewhere)]
+        assert _template_dirs()[0] == os.path.normpath(str(elsewhere))
+
+
+class TestActions:
+    @pytest.fixture
+    def with_action(self, project):
+        performed: list[list] = []
+
+        class Rows(Dataset):
+            id = fields.IntegerField()
+            text = fields.TextField()
+
+            class Meta:
+                source = InMemorySource([{"id": i, "text": f"row {i}"} for i in range(5)])
+                primary_key = "id"
+
+        site = AdminSite()
+
+        @site.register(Rows)
+        class RowsAdmin(ObjectAdmin):
+            def action_export(self, records):
+                "Export the selected rows as JSONL"
+                performed.append(records)
+                return f"Exported {len(records)} row(s)."
+
+            def action_touch(self, records):
+                "Touch them"
+                performed.append(records)
+
+        return site, Rows, performed
+
+    def test_actions_are_discovered_from_method_names(self, with_action):
+        site, rows, _ = with_action
+        assert site.get(rows._meta.label).get_actions() == {
+            "export": "Export the selected rows as JSONL",
+            "touch": "Touch them",
+        }
+
+    def test_the_label_comes_from_the_docstring(self, with_action):
+        """So what the user reads and what the developer reads cannot drift."""
+        site, rows, _ = with_action
+        assert site.get(rows._meta.label).get_actions()["export"].startswith("Export")
+
+    def test_an_explicit_order_is_honoured(self, project):
+        class Rows(Dataset):
+            id = fields.IntegerField()
+
+            class Meta:
+                source = InMemorySource([{"id": 1}])
+
+        site = AdminSite()
+
+        @site.register(Rows)
+        class RowsAdmin(ObjectAdmin):
+            actions = ("second", "first")
+
+            def action_first(self, records):
+                "One"
+
+            def action_second(self, records):
+                "Two"
+
+        assert list(site.get(Rows._meta.label).get_actions()) == ["second", "first"]
+
+    def test_an_admin_without_actions_offers_none(self, site_with_data):
+        site, reviews, *_ = site_with_data
+        assert site.get(reviews._meta.label).get_actions() == {}
+
+    def test_running_one_returns_its_own_message(self, with_action):
+        site, rows, performed = with_action
+        entry = site.get(rows._meta.label)
+
+        message = entry.run_action("export", list(rows.objects.take(3)))
+        assert message == "Exported 3 row(s)."
+        assert len(performed[0]) == 3
+
+    def test_an_action_that_returns_nothing_gets_a_default_message(self, with_action):
+        site, rows, _ = with_action
+        entry = site.get(rows._meta.label)
+        assert "2 row(s)" in entry.run_action("touch", list(rows.objects.take(2)))
+
+    def test_an_unknown_action_lists_the_real_ones(self, with_action):
+        from mlango.core.exceptions import FieldError
+
+        site, rows, _ = with_action
+        with pytest.raises(FieldError, match="export, touch"):
+            site.get(rows._meta.label).run_action("nope", [])
+
+    def test_the_checkboxes_and_action_bar_are_rendered(self, with_action):
+        from fastapi.testclient import TestClient
+
+        from mlango.admin.app import build_admin_app
+
+        site, rows, _ = with_action
+        with TestClient(build_admin_app(site)) as client:
+            body = client.get(f"/o/{rows._meta.label}").text
+
+        assert 'name="selected"' in body
+        assert "Export the selected rows as JSONL" in body
+
+    def test_posting_an_action_applies_it_to_the_ticked_rows(self, with_action):
+        from fastapi.testclient import TestClient
+
+        from mlango.admin.app import build_admin_app
+
+        site, rows, performed = with_action
+        with TestClient(build_admin_app(site)) as client:
+            response = client.post(
+                f"/o/{rows._meta.label}/action",
+                data={"action": "export", "selected": ["1", "3"]},
+                follow_redirects=False,
+            )
+
+        assert response.status_code == 303
+        assert [record["id"] for record in performed[-1]] == [1, 3]
+
+    def test_a_failing_action_reports_instead_of_500ing(self, project):
+        from fastapi.testclient import TestClient
+
+        from mlango.admin.app import build_admin_app
+
+        class Rows(Dataset):
+            id = fields.IntegerField()
+
+            class Meta:
+                source = InMemorySource([{"id": 1}])
+                primary_key = "id"
+
+        site = AdminSite()
+
+        @site.register(Rows)
+        class RowsAdmin(ObjectAdmin):
+            def action_explode(self, records):
+                "Break on purpose"
+                raise RuntimeError("boom")
+
+        with TestClient(build_admin_app(site)) as client:
+            response = client.post(
+                f"/o/{Rows._meta.label}/action",
+                data={"action": "explode", "selected": ["1"]},
+                follow_redirects=False,
+            )
+            assert response.status_code == 303
+            assert "Failed" in response.headers["location"]
+
+    def test_an_action_on_an_unknown_object_redirects_home(self, with_action):
+        from fastapi.testclient import TestClient
+
+        from mlango.admin.app import build_admin_app
+
+        site, *_ = with_action
+        with TestClient(build_admin_app(site)) as client:
+            response = client.post(
+                "/o/nope.Nope/action", data={"action": "export"}, follow_redirects=False
+            )
+        assert response.status_code == 303
+
+
+class TestDateHierarchy:
+    @pytest.fixture
+    def dated(self, project):
+        class Events(Dataset):
+            id = fields.IntegerField()
+            happened = fields.DateTimeField()
+
+            class Meta:
+                source = InMemorySource(
+                    [
+                        {"id": 1, "happened": "2026-01-15T10:00:00"},
+                        {"id": 2, "happened": "2026-01-20T10:00:00"},
+                        {"id": 3, "happened": "2026-03-02T10:00:00"},
+                    ]
+                )
+                primary_key = "id"
+
+        site = AdminSite()
+
+        @site.register(Events)
+        class EventsAdmin(ObjectAdmin):
+            date_hierarchy = "happened"
+
+        return site, Events
+
+    def test_the_periods_offered_are_the_months_present(self, dated):
+        site, events = dated
+        assert site.get(events._meta.label).date_periods() == ["2026-03", "2026-01"]
+
+    def test_selecting_a_period_narrows_the_rows(self, dated):
+        site, events = dated
+        entry = site.get(events._meta.label)
+        assert entry.filtered(period="2026-01").count() == 2
+        assert entry.filtered(period="2026-03").count() == 1
+
+    def test_no_period_shows_everything(self, dated):
+        site, events = dated
+        assert site.get(events._meta.label).filtered().count() == 3
+
+    def test_an_admin_without_a_hierarchy_offers_no_periods(self, site_with_data):
+        site, reviews, *_ = site_with_data
+        assert site.get(reviews._meta.label).date_periods() == []
+
+    def test_the_drill_down_is_rendered(self, dated):
+        from fastapi.testclient import TestClient
+
+        from mlango.admin.app import build_admin_app
+
+        site, events = dated
+        with TestClient(build_admin_app(site)) as client:
+            body = client.get(f"/o/{events._meta.label}").text
+
+        assert "date-hierarchy" in body
+        assert "2026-01" in body
+        assert "All dates" in body
 
 
 # --------------------------------------------------------------------------- #

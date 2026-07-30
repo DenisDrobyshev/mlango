@@ -49,6 +49,11 @@
 {% if opts.kind == 'dataset' %}
 <div class="card">
   <h2>Data preview</h2>
+
+  {% if message %}
+    <p class="messagelist">{{ message }}</p>
+  {% endif %}
+
   <form class="filters" method="get">
     {% if entry.get_search_fields() %}
       <label class="field">Search
@@ -68,19 +73,53 @@
     <button type="submit">Apply</button>
   </form>
 
+  {% if periods %}
+    <p class="date-hierarchy">
+      <a href="?">All dates</a>
+      {% for p in periods %}
+        · <a href="?period={{ p }}" {% if period == p %}class="selected"{% endif %}>{{ p }}</a>
+      {% endfor %}
+    </p>
+  {% endif %}
+
   {% if preview_error %}
     <p class="empty">Could not read the source: {{ preview_error }}</p>
   {% elif rows %}
+    <form method="post" action="{{ admin_url }}/o/{{ opts.label }}/action">
+    {% if actions %}
+      <div class="actions">
+        <label class="field">Action
+          <select name="action">
+            {% for name, description in actions.items() %}
+              <option value="{{ name }}">{{ description }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit">Go</button>
+        <span class="action-counter">Tick the rows to act on.</span>
+      </div>
+    {% endif %}
     <div class="scroll">
     <table>
-      <thead><tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+      <thead><tr>
+        {% if actions %}<th class="action-checkbox-column"></th>{% endif %}
+        {% for c in columns %}<th>{{ c }}</th>{% endfor %}
+      </tr></thead>
       <tbody>
         {% for row in rows %}
-        <tr>{% for c in columns %}<td>{{ entry.render(row, c) }}</td>{% endfor %}</tr>
+        <tr>
+          {% if actions %}
+            <td class="action-checkbox">
+              <input type="checkbox" name="selected" value="{{ row.get(opts.extras.get('primary_key', 'id')) }}">
+            </td>
+          {% endif %}
+          {% for c in columns %}<td>{{ entry.render(row, c) }}</td>{% endfor %}
+        </tr>
         {% endfor %}
       </tbody>
     </table>
     </div>
+    </form>
     <div class="pager">
       {% if page_no > 1 %}<a href="?page={{ page_no - 1 }}&q={{ search }}">← previous</a>{% endif %}
       <span class="empty">page {{ page_no }}</span>

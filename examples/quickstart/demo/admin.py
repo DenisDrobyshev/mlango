@@ -15,3 +15,15 @@ class ReviewsAdmin(admin.ObjectAdmin):
     list_filter = ("label",)
     search_fields = ("text",)
     list_per_page = 25
+
+    def action_export(self, records):
+        """Export the selected reviews as JSONL"""
+        import json
+
+        from mlango.storage import default_storage
+
+        path = default_storage().path("exports/reviews.jsonl")
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            for record in records:
+                fh.write(json.dumps(dict(record), ensure_ascii=False) + "\n")
+        return f"Wrote {len(records)} review(s) to {path}"

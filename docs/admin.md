@@ -73,6 +73,8 @@ class ReviewsAdmin(admin.ObjectAdmin):
 | `list_per_page` | 25 | Rows per page |
 | `preview_limit` | 5000 | How many rows a filter may scan |
 | `help_text` | `""` | Free text at the top of the page |
+| `date_hierarchy` | `""` | A date field to drill the preview down by month |
+| `actions` | every `action_*` | Which actions to offer, and in what order |
 
 Naming a field that does not exist is caught by `manage.py check`, not at
 render time.
@@ -89,6 +91,68 @@ class ReviewsAdmin(admin.ObjectAdmin):
     def render_length(self, record) -> str:
         return f"{len(record.text)} chars"
 ```
+
+## Actions
+
+Django's changelist actions, with the same shape: tick some rows, choose an
+action, apply. A method named `action_<name>` becomes one, and its first
+docstring line is the label, so what the user reads and what a developer reads
+cannot drift apart.
+
+```python
+@admin.register(Reviews)
+class ReviewsAdmin(admin.ObjectAdmin):
+
+    def action_export(self, records):
+        """Export the selected reviews as JSONL"""
+        path = default_storage().path("exports/reviews.jsonl")
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            for record in records:
+                fh.write(json.dumps(dict(record), ensure_ascii=False) + "\n")
+        return f"Wrote {len(records)} review(s) to {path}"
+```
+
+![The action bar above a data preview](assets/admin-dataset.png)
+
+Whatever the method returns is shown back to the user; return nothing and the
+label plus a row count is used. An action that raises is reported on the page
+rather than becoming a 500, because a failed export should not look like a
+broken admin.
+
+Selection is by primary key, so `Meta.primary_key` has to be declared for
+actions to have anything to select.
+
+## Drilling down by date
+
+```python
+class EventsAdmin(admin.ObjectAdmin):
+    date_hierarchy = "happened"
+```
+
+Adds a month strip above the preview, built from the values actually present.
+
+## Overriding a template
+
+The admin searches `ADMIN_TEMPLATE_DIRS` before its own directory, so a project
+replaces one template by name and leaves the rest alone:
+
+```
+myproject/
+└── templates/
+    └── admin/
+        └── base.html      ← replaces only this one
+```
+
+```python
+# settings.py — the default, shown for clarity
+ADMIN_TEMPLATE_DIRS = ["templates/admin"]
+```
+
+The framework's directory is always searched last, so an override can never make
+a page disappear: anything you do not provide still resolves. The templates
+available to shadow are `base.html`, `index.html`, `object.html`, `run.html`,
+`runs.html`, `trace.html`, `traces.html`, `versions.html`, `compare.html` and
+`missing.html`.
 
 ## What the pages show
 
@@ -146,10 +210,14 @@ python manage.py runserver --no-admin
 
 ## Theming
 
-The admin follows the reader's light or dark preference automatically. To restyle
-it, the whole appearance is one `<style>` block in
-`mlango/admin/templates/base.html` — override the template by placing your own
-earlier on the template search path, or contribute an improvement upstream.
+The palette and the furniture are Django's admin on purpose: the `#417690`
+header, the breadcrumb strip beneath it, modules with a coloured caption bar,
+the yellow accent. The audience is Django developers, and recognising the
+interface on sight is worth more than an original design.
+
+It follows the reader's light or dark preference automatically. The whole
+appearance is one `<style>` block in `base.html`, so restyling means shadowing
+that one template as above.
 
 ## Several sites
 
