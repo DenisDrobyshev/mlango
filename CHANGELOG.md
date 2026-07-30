@@ -35,11 +35,50 @@ All notable changes to this project are documented here. The format follows
 - Release workflow using PyPI trusted publishing, with the tag checked against
   `__version__`, the changelog checked for a matching section, and the built
   wheel verified to contain the admin templates and `py.typed`.
+- **`startproject` ships tests.** A new project comes with a working `tests/`
+  directory — eight tests covering datasets, training, evaluation and agents —
+  so it is green before anyone edits it and `manage.py test` works immediately.
+  `startapp` writes a `tests.py` to match.
+- **Documentation complete in English and Russian** — all 14 pages in both.
+- **The type surface is now checked.** `mypy mlango` is clean and blocking in
+  CI. Generic subsystems that took a bare `type` now name the family they mean
+  (`mlango.core.typing`), and declared fields read as values inside your own
+  `build()` rather than as `Field` objects, so user projects type-check too.
+
+### Changed
+
+- Coverage is 85% and gated: the floor lives in `pyproject.toml`, so
+  `pytest --cov` enforces the same number locally as on CI.
+- CI additionally runs `pip-audit`, CodeQL and Dependabot, defaults to read-only
+  token permissions, and exposes one aggregate `CI` check to require in branch
+  protection — so a job added later cannot silently stop blocking merges.
+- A management command now accepts settings supplied by `settings.configure()`,
+  not only `MLANGO_SETTINGS_MODULE`. Notebooks and test suites could not run a
+  command at all before this.
+- A missing run, trace or object in the admin answers `404` instead of `200`.
 
 ### Fixed
 
 - A configuration mistake in a transformers preset now reports the mistake
   rather than surfacing as `ModuleNotFoundError: transformers`.
+- **A streaming endpoint no longer breaks the whole OpenAPI schema.** The
+  handler's `StreamingResponse` annotation was unresolvable, so one stream route
+  took `/api/openapi.json` and the docs page down with it.
+- **scikit-learn inference now agrees with training on input shape.** A
+  single-feature model built a 2-D array from a request's dict while training
+  passed raw values, so a text pipeline failed on every served request; with
+  several features the column order followed the payload's own keys rather than
+  the declaration.
+- A mistyped label in an admin URL is a `404` page, not a `500`.
+- The admin's version-promotion redirect no longer assumes the default mount
+  point, so it works when the admin is mounted elsewhere.
+- `get_run()` eager-loads its collections, so reading `run.artifacts` outside
+  the session no longer raises `DetachedInstanceError`.
+- `manage.py test` cannot leave `BASE_DIR` pointing at the sandbox it deleted.
+  The "no tests found" path redirected settings before it failed, poisoning
+  every later command in the same process.
+- Metrics and probabilities read the declared feature order rather than a sorted
+  copy of the request's keys.
 
 ## 0.1.0 — 2026-07-30
 
