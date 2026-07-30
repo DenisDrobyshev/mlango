@@ -55,6 +55,10 @@ coverage:
 audit:
   stage: test
   script:
+    # Upgrade pip first: the base image ships an old one, and pip has its own
+    # advisories. They are real, but they are the image's, not this package's —
+    # auditing a stale build tool tells a user nothing about what they install.
+    - pip install --upgrade pip
     - pip install -e ".[sklearn,dev]" pip-audit
     # Audits what is installed, which is what a user gets. --skip-editable
     # leaves out mlango itself, which has no release to compare against, and

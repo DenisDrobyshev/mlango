@@ -109,6 +109,10 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: pyproject.toml
+      # Upgrade pip first: a base image can ship an old one, and pip has its own
+      # advisories. They are real, but they are the image's, not this package's —
+      # auditing a stale build tool tells a user nothing about what they install.
+      - run: pip install --upgrade pip
       - run: pip install -e ".[sklearn,dev]" pip-audit
       # Audits what is actually installed, which is what a user gets — not just
       # what the lockfile claims. Advisories appear against transitive

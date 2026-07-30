@@ -90,6 +90,15 @@ class TestInvariants:
             assert "pip-audit --desc --skip-editable" in blob
             assert "pip-audit --strict" not in blob
 
+    def test_both_audit_against_a_current_pip(self, commands):
+        """An old pip in a base image has its own advisories and fails the job.
+
+        They are genuine, but they belong to the image rather than to anything a
+        user installs — GitLab's python:3.12 shipped pip 25.0.1 with six.
+        """
+        for blob in commands:
+            assert "pip install --upgrade pip" in blob
+
     def test_the_docs_build_is_strict_in_both(self, commands):
         for blob in commands:
             assert "mkdocs build --strict" in blob
@@ -157,15 +166,11 @@ class TestPythonMatrix:
         assert on_gitlab == {"3.10", "3.11", "3.12", "3.13"}
 
     def test_the_matrix_covers_what_the_package_claims_to_support(self):
-        import tomllib
-
-        metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-        classifiers = metadata["project"]["classifiers"]
-        claimed = {
-            line.rsplit(" :: ", 1)[1]
-            for line in classifiers
-            if line.startswith("Programming Language :: Python :: 3.")
-        }
+        # Read with a regex rather than tomllib, which is only stdlib from 3.11
+        # — and 3.10 is one of the versions this very test is about.
+        text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        claimed = set(re.findall(r"Programming Language :: Python :: (3\.\d+)", text))
+        assert claimed, "pyproject.toml declares no Python version classifiers"
 
         entries = _load(GITHUB)["jobs"]["test"]["strategy"]["matrix"]["include"]
         tested = {str(entry["python"]) for entry in entries}
