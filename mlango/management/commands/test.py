@@ -54,12 +54,12 @@ class Command(BaseCommand):
         # The default resolves against the project root rather than the shell's
         # working directory: running manage.py from elsewhere should not collect
         # whatever `tests` happens to sit next to you.
-        project_tests = os.path.join(str(settings.BASE_DIR), "tests")
-        targets = options["target"] or ([project_tests] if os.path.isdir(project_tests) else [])
+        targets = options["target"] or _default_targets()
         if not targets:
+            root = os.path.join(str(settings.BASE_DIR), "tests")
             raise CommandError(
-                f"No tests found. Create {project_tests}, or name a path: "
-                f"manage.py test myapp/tests.py"
+                f"No tests found. Create {root}, add tests.py to an installed app, "
+                f"or name a path: manage.py test myapp/tests.py"
             )
 
         argv = [*targets]
@@ -109,3 +109,34 @@ class Command(BaseCommand):
                 f"Tests failed (pytest exit code {exit_code}).", returncode=exit_code
             )
         self.ok("Tests passed.")
+
+
+def _default_targets() -> list[str]:
+    """Where to look when no path was named.
+
+    The project's own ``tests/`` directory, plus each installed app's tests.
+    ``startapp`` writes an app a ``tests.py``, and a scaffold that creates a file
+    the test command then ignores teaches people the file does not matter.
+    Django collects app tests; so does this.
+    """
+    from mlango.conf import settings
+    from mlango.core.registry import apps
+
+    found: list[str] = []
+
+    root = os.path.join(str(settings.BASE_DIR), "tests")
+    if os.path.isdir(root):
+        found.append(root)
+
+    for config in apps.get_app_configs():
+        directory = getattr(config, "path", "") or ""
+        if not directory:
+            continue
+        for candidate in (os.path.join(directory, "tests.py"), os.path.join(directory, "tests")):
+            # An app inside the project root is already covered by `tests/`
+            # above only if it literally sits there; otherwise add it once.
+            if os.path.exists(candidate) and candidate not in found:
+                found.append(candidate)
+                break
+
+    return found

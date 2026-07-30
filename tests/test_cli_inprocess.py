@@ -693,6 +693,39 @@ class TestTestCommand:
         assert run("test", "-k", "dataset_loads") == 0
         assert "1 passed" in capsys.readouterr().out
 
+    def test_an_installed_app_s_own_tests_are_collected(self, live_project, capsys):
+        """startapp writes <app>/tests.py, so the default run has to find it.
+
+        A scaffold that creates a file the test command then ignores teaches
+        people the file does not matter.
+        """
+        (live_project / "demo" / "tests.py").write_text(
+            "def test_declared_in_the_app():\n    assert True\n", encoding="utf-8"
+        )
+        try:
+            assert run("test") == 0
+            out = capsys.readouterr().out
+            assert "tests.py" in out
+            assert "test_declared_in_the_app" in out or "9 passed" in out
+        finally:
+            (live_project / "demo" / "tests.py").unlink()
+
+    def test_a_project_with_only_app_tests_still_runs(self, live_project, capsys):
+        import shutil
+
+        shipped = live_project / "tests"
+        moved = live_project / "tests-aside"
+        shutil.move(str(shipped), str(moved))
+        (live_project / "demo" / "tests.py").write_text(
+            "def test_only_one():\n    assert True\n", encoding="utf-8"
+        )
+        try:
+            assert run("test") == 0
+            assert "1 passed" in capsys.readouterr().out
+        finally:
+            (live_project / "demo" / "tests.py").unlink()
+            shutil.move(str(moved), str(shipped))
+
     def test_a_failed_run_leaves_settings_alone(self, live_project, capsys):
         """The sandbox must not outlive the command.
 
