@@ -699,16 +699,31 @@ class TestTestCommand:
         A scaffold that creates a file the test command then ignores teaches
         people the file does not matter.
         """
+        import re
+
+        def passed() -> int:
+            """How many tests the last run reported.
+
+            Counting is the behaviour; the file names pytest prints are output
+            formatting, and asserting on those failed on a runner where the
+            summary is quiet.
+            """
+            assert run("test") == 0
+            match = re.search(r"(\d+) passed", capsys.readouterr().out)
+            assert match, "no pytest summary to read"
+            return int(match.group(1))
+
+        before = passed()
+
         (live_project / "demo" / "tests.py").write_text(
             "def test_declared_in_the_app():\n    assert True\n", encoding="utf-8"
         )
         try:
-            assert run("test") == 0
-            out = capsys.readouterr().out
-            assert "tests.py" in out
-            assert "test_declared_in_the_app" in out or "9 passed" in out
+            assert passed() == before + 1
         finally:
             (live_project / "demo" / "tests.py").unlink()
+
+        assert passed() == before
 
     def test_a_project_with_only_app_tests_still_runs(self, live_project, capsys):
         import shutil
