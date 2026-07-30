@@ -105,10 +105,17 @@ class Registry:
             self._pending.append((kind, cls))
         existing = self._objects[kind].get(label)
         if existing is not None and existing is not cls:
-            raise ImproperlyConfigured(
-                f"Two {kind}s are both labelled {label!r}: {existing.__module__} and "
-                f"{cls.__module__}. Labels must be unique within an app."
-            )
+            # Same module means the class was declared again, not duplicated:
+            # a re-run notebook cell, a reloaded module, a redefinition in a
+            # shell. Replacing is the intent, and refusing made mlango unusable
+            # in Jupyter, where re-running a cell is the commonest thing anyone
+            # does. Two modules claiming one label is still a real collision.
+            if existing.__module__ != cls.__module__:
+                raise ImproperlyConfigured(
+                    f"Two {kind}s are both labelled {label!r}: {existing.__module__} and "
+                    f"{cls.__module__}. Labels must be unique within an app."
+                )
+            self._pending = [(k, c) for k, c in self._pending if not (k == kind and c is existing)]
         self._objects[kind][label] = cls
 
     def unregister(self, kind: str, target: DeclarativeClass | str) -> bool:

@@ -66,6 +66,7 @@ plugins:
             Getting started: Начало работы
             Introduction: Введение
             Tutorial: Учебник
+            Notebooks: Ноутбуки
             Concepts: Концепции
             Philosophy: Философия
             Architecture: Архитектура
@@ -113,6 +114,7 @@ nav:
   - Getting started:
       - Introduction: index.md
       - Tutorial: tutorial.md
+      - Notebooks: notebooks.md
       - Concepts: concepts.md
       - Philosophy: philosophy.md
       - Architecture: architecture.md

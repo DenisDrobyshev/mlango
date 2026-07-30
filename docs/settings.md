@@ -147,7 +147,8 @@ Nested dict settings merge with their defaults, so overriding
 
 ## Configuring without a module
 
-Handy in notebooks and tests:
+Used by tests, scripts and anything without a `manage.py`. For a notebook,
+[`mlango.notebook()`](notebooks.md) wraps this with defaults chosen for one.
 
 ```python
 from mlango.conf import settings
