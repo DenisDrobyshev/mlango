@@ -2,11 +2,18 @@
 
 **A batteries-included framework for machine learning, analytics and LLM agents — built on Django's philosophy.**
 
-*Read this in [Русский](README.ru.md).*
+*Read this in [Русский](https://github.com/DenisDrobyshev/mlango/blob/master/README.ru.md).*
 
-[![CI](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml/badge.svg)](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+<!-- Badges read from PyPI rather than from the repository. A CI badge points at
+     a workflow the repository has to be public to expose, and a broken image is
+     a worse first impression than no badge. Add it back when the repo opens. -->
+[![PyPI](https://img.shields.io/pypi/v/mlango)](https://pypi.org/project/mlango/)
+[![Python](https://img.shields.io/pypi/pyversions/mlango)](https://pypi.org/project/mlango/)
+[![License](https://img.shields.io/pypi/l/mlango)](https://opensource.org/licenses/MIT)
+
+```bash
+pip install "mlango[sklearn]"
+```
 
 ML projects tend to become a pile of scripts: one to load data, one to train, a
 notebook that produced the number in the slide deck, a `checkpoints/` directory
@@ -276,19 +283,24 @@ schema, the admin and the CLI. Being a framework is what removes them.
 
 ## Documentation
 
-Full docs, including a tutorial that builds a project end to end:
-**<https://denisdrobyshev.github.io/mlango/>**
+Full docs, including a tutorial that builds a project end to end, live in
+[`docs/`](https://github.com/DenisDrobyshev/mlango/tree/master/docs) and build
+into a browsable site with:
+
+```bash
+pip install mkdocs-material mkdocs-static-i18n && mkdocs serve
+```
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the
-development setup, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community
+Contributions are welcome — see [CONTRIBUTING.md](https://github.com/DenisDrobyshev/mlango/blob/master/CONTRIBUTING.md) for the
+development setup, and [CODE_OF_CONDUCT.md](https://github.com/DenisDrobyshev/mlango/blob/master/CODE_OF_CONDUCT.md) for community
 expectations. Good first issues are labelled
 [`good first issue`](https://github.com/DenisDrobyshev/mlango/labels/good%20first%20issue).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/DenisDrobyshev/mlango/blob/master/LICENSE).
 
 mlango is not affiliated with or endorsed by the Django Software Foundation. It
 borrows Django's design philosophy, gratefully.

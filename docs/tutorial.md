@@ -47,7 +47,12 @@ Save some data as `data/tickets.jsonl` — one JSON object per line:
 {"id": 4, "subject": "Feature idea for exports", "urgency": "low"}
 ```
 
-Now declare what a record *is*:
+Now declare what a record *is*. You could write that by hand — but you have the
+file already, so let mlango read it and write the first draft:
+
+```bash
+python manage.py inspectdata data/tickets.jsonl --name Tickets
+```
 
 ```python title="tickets/datasets.py"
 from mlango.core import fields
@@ -65,6 +70,17 @@ class Tickets(Dataset):
         source = JSONLSource("data/tickets.jsonl")
         primary_key = "id"
 ```
+
+`inspectdata` samples the file, picks a field type per column, notices that `id`
+is unique and makes it the primary key, and spots `urgency` as the label. Paste
+the output into `tickets/datasets.py` — or pass `--write --app tickets` and skip
+the paste.
+
+It is a first draft, not an oracle, and the version above is the draft after one
+edit. From four short rows it proposes `subject = CharField(max_length=32)`,
+because nothing it saw was longer than that; real tickets are prose, so widen it
+to `TextField(max_length=500)`. Anything it guessed at carries a comment saying
+so — which is the point of reading the output rather than trusting it.
 
 Three things follow from those six lines.
 
@@ -156,6 +172,21 @@ python manage.py runs show <run-id>
 
 Note `_data_fingerprint` in the parameters. Two runs with the same fingerprint
 saw the same data view — which is what makes a comparison meaningful.
+
+Try it on something it has not seen, without starting a server:
+
+```bash
+python manage.py predict tickets.Urgency "the checkout page is down for everyone"
+```
+
+`predict` loads the registered version — the same artifact the API would
+serve — so what you see here is what production would answer. It also takes
+`--dataset` to score the declared data, or `--file` to score a batch:
+
+```bash
+python manage.py predict tickets.Urgency --dataset --filter urgency=high -n 5
+python manage.py predict tickets.Urgency --file inbox.jsonl --format jsonl --output scored.jsonl
+```
 
 ## 6. Search the space
 

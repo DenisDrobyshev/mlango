@@ -47,7 +47,12 @@ python manage.py check
 {"id": 4, "subject": "Идея по экспорту данных", "urgency": "low"}
 ```
 
-Теперь объявите, чем *является* запись:
+Теперь объявите, чем *является* запись. Можно написать это руками — но файл уже
+есть, так что пусть mlango прочитает его и напишет черновик сам:
+
+```bash
+python manage.py inspectdata data/tickets.jsonl --name Tickets
+```
 
 ```python title="tickets/datasets.py"
 from mlango.core import fields
@@ -65,6 +70,17 @@ class Tickets(Dataset):
         source = JSONLSource("data/tickets.jsonl")
         primary_key = "id"
 ```
+
+`inspectdata` читает выборку, подбирает тип поля для каждой колонки, замечает,
+что `id` уникален, и делает его первичным ключом, а в `urgency` узнаёт метку.
+Вставьте вывод в `tickets/datasets.py` — или добавьте `--write --app tickets` и
+обойдитесь без вставки.
+
+Это черновик, а не истина, и выше — черновик после одной правки. На четырёх
+коротких строках команда предложит `subject = CharField(max_length=32)`, потому
+что ничего длиннее не видела; настоящие тикеты — это проза, так что расширьте до
+`TextField(max_length=500)`. Всё угаданное помечено комментарием — ради этого
+вывод и стоит читать, а не принимать на веру.
 
 Из этих шести строк следуют три вещи.
 
@@ -159,6 +175,21 @@ python manage.py runs show <run-id>
 Обратите внимание на `_data_fingerprint` в параметрах. Два рана с одинаковым
 отпечатком видели одно и то же представление данных — именно это делает
 сравнение осмысленным.
+
+Попробуйте на том, чего модель не видела, — сервер поднимать не нужно:
+
+```bash
+python manage.py predict tickets.Urgency "страница оплаты не работает ни у кого"
+```
+
+`predict` загружает зарегистрированную версию — тот же артефакт, который отдавал
+бы API, — то есть здесь виден ровно продакшен-ответ. Ещё он умеет `--dataset`,
+чтобы оценить объявленные данные, и `--file` для пакета:
+
+```bash
+python manage.py predict tickets.Urgency --dataset --filter urgency=high -n 5
+python manage.py predict tickets.Urgency --file inbox.jsonl --format jsonl --output scored.jsonl
+```
 
 ## 6. Обойти пространство параметров
 

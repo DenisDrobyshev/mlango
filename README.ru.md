@@ -2,11 +2,18 @@
 
 **Фреймворк «с батарейками» для машинного обучения, аналитики и LLM-агентов — построенный на философии Django.**
 
-*Read this in [English](README.md).*
+*Read this in [English](https://github.com/DenisDrobyshev/mlango/blob/master/README.md).*
 
-[![CI](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml/badge.svg)](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+<!-- Бейджи читаются из PyPI, а не из репозитория: бейдж CI указывает на workflow,
+     который виден только в публичном репозитории, а сломанная картинка хуже, чем
+     её отсутствие. Вернуть, когда репозиторий станет публичным. -->
+[![PyPI](https://img.shields.io/pypi/v/mlango)](https://pypi.org/project/mlango/)
+[![Python](https://img.shields.io/pypi/pyversions/mlango)](https://pypi.org/project/mlango/)
+[![License](https://img.shields.io/pypi/l/mlango)](https://opensource.org/licenses/MIT)
+
+```bash
+pip install "mlango[sklearn]"
+```
 
 ML-проекты имеют свойство превращаться в свалку скриптов: один загружает данные,
 другой обучает, где-то лежит ноутбук, выдавший цифру для презентации за прошлый
@@ -272,19 +279,24 @@ SERVE_MIDDLEWARE = ["mlango.serve.middleware.ApiKeyMiddleware", ...]
 
 ## Документация
 
-Полная документация с учебником, собирающим проект от начала до конца:
-**<https://denisdrobyshev.github.io/mlango/ru/>**
+Полная документация с учебником, собирающим проект от начала до конца, лежит в
+[`docs/`](https://github.com/DenisDrobyshev/mlango/tree/master/docs) и собирается
+в сайт одной командой:
+
+```bash
+pip install mkdocs-material mkdocs-static-i18n && mkdocs serve
+```
 
 ## Участие
 
-Вклад приветствуется — см. [CONTRIBUTING.md](CONTRIBUTING.md) для настройки
-окружения и [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) для правил сообщества.
+Вклад приветствуется — см. [CONTRIBUTING.md](https://github.com/DenisDrobyshev/mlango/blob/master/CONTRIBUTING.md) для настройки
+окружения и [CODE_OF_CONDUCT.md](https://github.com/DenisDrobyshev/mlango/blob/master/CODE_OF_CONDUCT.md) для правил сообщества.
 Переводы документации особенно нужны — по одной странице за раз, см.
-[Перевод](docs/translating.md).
+[Перевод](https://github.com/DenisDrobyshev/mlango/blob/master/docs/translating.md).
 
 ## Лицензия
 
-MIT — см. [LICENSE](LICENSE).
+MIT — см. [LICENSE](https://github.com/DenisDrobyshev/mlango/blob/master/LICENSE).
 
 mlango не связан с Django Software Foundation и не поддерживается ею. Он с
 благодарностью заимствует философию Django.

@@ -77,7 +77,14 @@ class PythonSource(Source):
 
 
 class _FileSource(Source):
-    def __init__(self, path: str, *, encoding: str = "utf-8"):
+    #: utf-8-sig, not utf-8: it decodes a plain UTF-8 file identically and also
+    #: strips a byte-order mark if one is there. Excel, Notepad and PowerShell
+    #: all write a BOM by default, so data exported on Windows routinely has
+    #: one — and without this the first record fails to parse with a message
+    #: about byte 0xEF that says nothing about the actual problem.
+    DEFAULT_ENCODING = "utf-8-sig"
+
+    def __init__(self, path: str, *, encoding: str = DEFAULT_ENCODING):
         self.path = path
         self.encoding = encoding
 
@@ -123,7 +130,9 @@ class JSONLSource(_FileSource):
 class JSONSource(_FileSource):
     """A single JSON array, or an object whose ``key`` holds the array."""
 
-    def __init__(self, path: str, *, key: str | None = None, encoding: str = "utf-8"):
+    def __init__(
+        self, path: str, *, key: str | None = None, encoding: str = _FileSource.DEFAULT_ENCODING
+    ):
         super().__init__(path, encoding=encoding)
         self.key = key
 
@@ -146,7 +155,9 @@ class JSONSource(_FileSource):
 class CSVSource(_FileSource):
     """Delimited text. Values arrive as strings; fields coerce them."""
 
-    def __init__(self, path: str, *, delimiter: str = ",", encoding: str = "utf-8"):
+    def __init__(
+        self, path: str, *, delimiter: str = ",", encoding: str = _FileSource.DEFAULT_ENCODING
+    ):
         super().__init__(path, encoding=encoding)
         self.delimiter = delimiter
 

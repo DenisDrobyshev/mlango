@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- **A UTF-8 file with a byte-order mark no longer fails to parse.** Excel,
+  Notepad and PowerShell all write a BOM by default, so data exported on Windows
+  routinely has one — and `JSONLSource`, `JSONSource` and `CSVSource` died on the
+  first record with a message about byte 0xEF that said nothing about the cause.
+  They read as `utf-8-sig`, which decodes a plain UTF-8 file identically.
+- The README's links were relative, so on PyPI they resolved against the project
+  page and 404ed, and the CI badge rendered as a broken image because it points
+  at a workflow only a public repository exposes. Links are absolute and the
+  badges read from PyPI. `tests/test_pipelines.py` now checks this, and that the
+  English and Russian copies do not drift apart.
+
+### Changed
+
+- The tutorial starts from a file you already have: `inspectdata` writes the
+  first `Dataset` declaration, and `predict` scores the trained model without
+  starting a server. Both were added after the tutorial was written and it had
+  never mentioned them.
+
 ## 0.1.0 — 2026-07-30
 
 First release. mlango applies Django's design philosophy to machine learning,

@@ -213,6 +213,40 @@ class TestSources:
         with pytest.raises(FileNotFoundError):
             list(JSONLSource(str(project / "nope.jsonl")))
 
+    @pytest.mark.parametrize(
+        ("name", "body", "source_class"),
+        [
+            ("bom.jsonl", '{"a": 1}\n{"a": 2}\n', JSONLSource),
+            ("bom.csv", "a\n1\n2\n", CSVSource),
+        ],
+    )
+    def test_a_byte_order_mark_does_not_break_the_first_record(
+        self, project, name, body, source_class
+    ):
+        """Excel, Notepad and PowerShell all write a BOM by default.
+
+        Without utf-8-sig the first record failed to parse, and the message
+        talked about byte 0xEF rather than about the file having a BOM.
+        """
+        path = project / name
+        path.write_bytes(b"\xef\xbb\xbf" + body.encode("utf-8"))
+
+        rows = list(source_class(str(path)))
+        assert len(rows) == 2
+        assert list(rows[0]) == ["a"], rows[0]
+
+    def test_a_file_without_a_bom_is_unaffected(self, project):
+        path = project / "plain.jsonl"
+        path.write_text('{"a": 1}\n', encoding="utf-8")
+        assert list(JSONLSource(str(path))) == [{"a": 1}]
+
+    def test_a_json_array_with_a_bom(self, project):
+        from mlango.data import JSONSource
+
+        path = project / "bom.json"
+        path.write_bytes(b"\xef\xbb\xbf" + b'[{"a": 1}]')
+        assert list(JSONSource(str(path))) == [{"a": 1}]
+
 
 class TestMaterialize:
     def test_writes_a_version(self, project, reviews):

@@ -203,6 +203,49 @@ class TestGitHubSpecific:
         assert "visibility == 'public'" in str(docs["jobs"]["deploy"]["if"])
 
 
+class TestReadme:
+    """The README is the PyPI landing page, so its links are load-bearing.
+
+    They were not: relative links resolved against pypi.org and 404ed, and the
+    CI badge rendered as a broken image because it points at a workflow only a
+    public repository exposes. The English and Russian copies then drifted from
+    each other while that was being fixed, which is the same failure the
+    pipeline tests above exist to catch.
+    """
+
+    @pytest.fixture(scope="class")
+    def readmes(self) -> dict[str, str]:
+        return {
+            name: (ROOT / name).read_text(encoding="utf-8")
+            for name in ("README.md", "README.ru.md")
+        }
+
+    def test_no_relative_links(self, readmes):
+        """PyPI renders the README standalone; a relative link goes nowhere."""
+        for name, text in readmes.items():
+            relative = re.findall(r"\]\((?!https?:|#|mailto:)([^)]+)\)", text)
+            assert not relative, f"{name}: {relative}"
+
+    def test_no_badge_that_needs_a_public_repository(self, readmes):
+        for name, text in readmes.items():
+            assert "actions/workflows" not in text, f"{name} has a CI badge"
+
+    def test_both_carry_the_same_badges(self, readmes):
+        badges = {
+            name: sorted(set(re.findall(r"img\.shields\.io/([^)\s]+)", text)))
+            for name, text in readmes.items()
+        }
+        assert badges["README.md"] == badges["README.ru.md"]
+
+    def test_each_points_at_the_other(self, readmes):
+        assert "README.ru.md" in readmes["README.md"]
+        assert "README.md" in readmes["README.ru.md"]
+
+    def test_both_show_the_install_command(self, readmes):
+        for name, text in readmes.items():
+            assert 'pip install "mlango[sklearn]"' in text, name
+
+
 class TestGitLabSpecific:
     def test_pages_builds_into_the_directory_gitlab_serves(self):
         """The job name and `public/` are fixed by GitLab, not by us."""
