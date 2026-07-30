@@ -4,9 +4,7 @@
 
 *Read this in [English](https://github.com/DenisDrobyshev/mlango/blob/master/README.md).*
 
-<!-- Бейджи читаются из PyPI, а не из репозитория: бейдж CI указывает на workflow,
-     который виден только в публичном репозитории, а сломанная картинка хуже, чем
-     её отсутствие. Вернуть, когда репозиторий станет публичным. -->
+[![CI](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml/badge.svg)](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/mlango)](https://pypi.org/project/mlango/)
 [![Python](https://img.shields.io/pypi/pyversions/mlango)](https://pypi.org/project/mlango/)
 [![License](https://img.shields.io/pypi/l/mlango)](https://opensource.org/licenses/MIT)
@@ -224,9 +222,11 @@ OpenAPI-схемы выводятся из деклараций, поэтому 
 
 ```bash
 python manage.py check                          # проверить весь проект
+python manage.py inspectdata data/reviews.csv    # объявить Dataset по файлу
 python manage.py dataset head reviews.Reviews   # заглянуть в данные
 python manage.py makemigrations && python manage.py migrate
 python manage.py train reviews.Sentiment -p C=2.0 --tag baseline
+python manage.py predict reviews.Sentiment "понравилось от начала до конца"
 python manage.py sweep reviews.Sentiment -p C=0.25,1,4 --promote-best production
 python manage.py runs list
 python manage.py runs compare 7c8f1020 c089b7e6
@@ -279,13 +279,8 @@ SERVE_MIDDLEWARE = ["mlango.serve.middleware.ApiKeyMiddleware", ...]
 
 ## Документация
 
-Полная документация с учебником, собирающим проект от начала до конца, лежит в
-[`docs/`](https://github.com/DenisDrobyshev/mlango/tree/master/docs) и собирается
-в сайт одной командой:
-
-```bash
-pip install mkdocs-material mkdocs-static-i18n && mkdocs serve
-```
+Полная документация с учебником, собирающим проект от начала до конца:
+**<https://denisdrobyshev.github.io/mlango/ru/>**
 
 ## Участие
 

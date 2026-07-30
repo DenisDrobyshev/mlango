@@ -226,16 +226,29 @@ class TestReadme:
             relative = re.findall(r"\]\((?!https?:|#|mailto:)([^)]+)\)", text)
             assert not relative, f"{name}: {relative}"
 
-    def test_no_badge_that_needs_a_public_repository(self, readmes):
-        for name, text in readmes.items():
-            assert "actions/workflows" not in text, f"{name} has a CI badge"
-
     def test_both_carry_the_same_badges(self, readmes):
+        """Including the CI badge, which only renders while the repo is public."""
         badges = {
-            name: sorted(set(re.findall(r"img\.shields\.io/([^)\s]+)", text)))
+            name: sorted(
+                set(re.findall(r"img\.shields\.io/([^)\s]+)", text))
+                | set(re.findall(r"(actions/workflows/[^)\s]+)", text))
+            )
             for name, text in readmes.items()
         }
         assert badges["README.md"] == badges["README.ru.md"]
+        assert badges["README.md"], "no badges at all"
+
+    def test_both_list_the_same_manage_py_commands(self, readmes):
+        """The command list is the tour of the CLI; a stale copy undersells it."""
+        commands = {
+            name: sorted(set(re.findall(r"manage\.py ([a-z]+)", text)))
+            for name, text in readmes.items()
+        }
+        assert commands["README.md"] == commands["README.ru.md"]
+
+    def test_both_link_to_the_documentation_site(self, readmes):
+        for name, text in readmes.items():
+            assert "denisdrobyshev.github.io/mlango" in text, name
 
     def test_each_points_at_the_other(self, readmes):
         assert "README.ru.md" in readmes["README.md"]

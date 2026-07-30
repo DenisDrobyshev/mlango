@@ -4,9 +4,7 @@
 
 *Read this in [Русский](https://github.com/DenisDrobyshev/mlango/blob/master/README.ru.md).*
 
-<!-- Badges read from PyPI rather than from the repository. A CI badge points at
-     a workflow the repository has to be public to expose, and a broken image is
-     a worse first impression than no badge. Add it back when the repo opens. -->
+[![CI](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml/badge.svg)](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/mlango)](https://pypi.org/project/mlango/)
 [![Python](https://img.shields.io/pypi/pyversions/mlango)](https://pypi.org/project/mlango/)
 [![License](https://img.shields.io/pypi/l/mlango)](https://opensource.org/licenses/MIT)
@@ -227,6 +225,7 @@ python manage.py dataset materialize reviews.Reviews
 python manage.py makemigrations && python manage.py migrate
 python manage.py train reviews.Sentiment -p C=2.0 --tag baseline
 python manage.py predict reviews.Sentiment "loved every minute"
+python manage.py sweep reviews.Sentiment -p C=0.25,1,4 --promote-best production
 python manage.py runs list
 python manage.py runs compare 7c8f1020 c089b7e6
 python manage.py evaluate reviews.Accuracy --min-pass-rate 0.9
@@ -283,13 +282,8 @@ schema, the admin and the CLI. Being a framework is what removes them.
 
 ## Documentation
 
-Full docs, including a tutorial that builds a project end to end, live in
-[`docs/`](https://github.com/DenisDrobyshev/mlango/tree/master/docs) and build
-into a browsable site with:
-
-```bash
-pip install mkdocs-material mkdocs-static-i18n && mkdocs serve
-```
+Full docs, including a tutorial that builds a project end to end:
+**<https://denisdrobyshev.github.io/mlango/>**
 
 ## Contributing
 
