@@ -171,12 +171,12 @@ charts, side-by-side run comparison, dataset and model versions with one-click
 promotion, and a step-by-step trace viewer for every agent call. It is
 server-rendered with no build step and no CDN.
 
-![The mlango admin: everything a project declares, and everything it has run](docs/assets/admin-overview.png)
+![The mlango admin: everything a project declares, and everything it has run](https://raw.githubusercontent.com/DenisDrobyshev/mlango/master/docs/assets/admin-overview.png)
 
 Every run keeps its environment, parameters, metrics and artifacts, so a number
 from six months ago still says where it came from:
 
-![A run page: environment, parameters, metrics and artifacts](docs/assets/admin-run.png)
+![A run page: environment, parameters, metrics and artifacts](https://raw.githubusercontent.com/DenisDrobyshev/mlango/master/docs/assets/admin-run.png)
 
 ### Agents as declarations
 
