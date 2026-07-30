@@ -151,7 +151,7 @@ class TorchTrainer(Trainer):
 
                 optimizer.zero_grad(set_to_none=True)
                 outputs = module(inputs)
-                loss = criterion(outputs, targets)
+                loss = criterion(_align(outputs, targets), targets)
                 loss.backward()
                 optimizer.step()
 
@@ -206,7 +206,7 @@ class TorchTrainer(Trainer):
                 inputs, targets = self._encode(model, batch, target, features)
                 inputs, targets = inputs.to(device), targets.to(device)
                 outputs = module(inputs)
-                total += float(criterion(outputs, targets).item()) * len(batch)
+                total += float(criterion(_align(outputs, targets), targets).item()) * len(batch)
                 seen += len(batch)
                 predictions.extend(_decode(model, outputs, target))
                 truth.extend(record.get(target) for record in batch)
@@ -227,9 +227,8 @@ class TorchTrainer(Trainer):
         dataset_class = model.get_dataset()
         target = model.get_target(dataset_class)
         features = model.get_features(dataset_class)
-        records = [value if isinstance(value, dict) else {features[0]: value} for value in inputs]
-        for record in records:
-            record.setdefault(target, _placeholder(dataset_class._meta.get_field(target)))
+        placeholder = _placeholder(dataset_class._meta.get_field(target))
+        records = _as_records(inputs, features, target, placeholder)
 
         device = next(fitted.parameters()).device
         encoded, _targets = self._encode(model, records, target, features)
@@ -249,9 +248,7 @@ class TorchTrainer(Trainer):
             return None
 
         features = model.get_features(dataset_class)
-        records = [value if isinstance(value, dict) else {features[0]: value} for value in inputs]
-        for record in records:
-            record.setdefault(target, classes[0])
+        records = _as_records(inputs, features, target, classes[0])
 
         device = next(fitted.parameters()).device
         encoded, _ = self._encode(model, records, target, features)
@@ -293,6 +290,21 @@ class TorchTrainer(Trainer):
         }
 
 
+def _align(outputs: Any, targets: Any) -> Any:
+    """Drop a trailing singleton dimension so a regression loss pairs row-wise.
+
+    A regression head is almost always ``nn.Linear(..., 1)``, which gives
+    ``(N, 1)`` against targets of ``(N,)``. MSELoss broadcasts that into an
+    ``(N, N)`` matrix and returns a number that looks like a loss but compares
+    every prediction against every target — the run reports a plausible curve
+    while the gradients are wrong. Torch warns about it; a framework should not
+    make the user read warnings to find out its training loop is broken.
+    """
+    if targets.dim() == 1 and outputs.dim() == 2 and outputs.shape[-1] == 1:
+        return outputs.squeeze(-1)
+    return outputs
+
+
 def _decode(model: Any, outputs: Any, target: str) -> list[Any]:
     """Logits or regression outputs back into declared label values."""
     import torch
@@ -309,3 +321,24 @@ def _decode(model: Any, outputs: Any, target: str) -> list[Any]:
 def _placeholder(target_field: Any) -> Any:
     classes = getattr(target_field, "classes", None)
     return classes[0] if classes else 0.0
+
+
+def _as_records(
+    inputs: list[Any], features: list[str], target: str, placeholder: Any
+) -> list[dict]:
+    """Inputs as records, each carrying a stand-in target value.
+
+    ``_encode`` builds both the feature matrix and the target tensor in one pass,
+    so a record needs the target key present even at inference time, where the
+    answer is what we are asking for. The stand-in is discarded.
+
+    Copied, never mutated in place: the dicts belong to the caller, and writing a
+    fabricated label into them would leave a value that looks like ground truth
+    in whatever they do with the rows next.
+    """
+    records = []
+    for value in inputs:
+        record = dict(value) if isinstance(value, dict) else {features[0]: value}
+        record.setdefault(target, placeholder)
+        records.append(record)
+    return records

@@ -75,6 +75,18 @@ All notable changes to this project are documented here. The format follows
   not only `MLANGO_SETTINGS_MODULE`. Notebooks and test suites could not run a
   command at all before this.
 - A missing run, trace or object in the admin answers `404` instead of `200`.
+- **The torch trainer computed the wrong loss for every regression model.** A
+  regression head is almost always `nn.Linear(..., 1)`, giving `(N, 1)` against
+  targets of `(N,)`; `MSELoss` broadcast that into an `(N, N)` matrix, comparing
+  every prediction against every target. The recorded curve looked plausible
+  while the gradients were wrong. Torch only warns about it, so the shapes are
+  now aligned before the loss is taken — a model predicting perfectly scores 0.0
+  rather than 2.0.
+- **The torch trainer wrote into the caller's data at inference.** `predict()`
+  and `predict_proba()` need the target key present to encode a batch, and were
+  filling it in on the dicts they were handed — leaving a fabricated label in
+  rows the caller went on to use, indistinguishable from ground truth. They copy
+  now.
 - Documentation headings that other pages link to now carry explicit anchors. A
   Cyrillic heading slugifies to a positional anchor (`_3`) that moves whenever a
   section is added above it, so every cross-language link to one was fragile.

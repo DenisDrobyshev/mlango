@@ -23,8 +23,8 @@ jobs:
     name: Build the site
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -38,9 +38,9 @@ jobs:
       # Pages needs enabling on the repository, which a private repository
       # cannot do without a paid plan. Skipped rather than left failing; it
       # begins publishing on its own once the repository is public.
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         if: github.event.repository.visibility == 'public'
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: github.event.repository.visibility == 'public'
         with:
           path: site
@@ -55,4 +55,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
