@@ -214,18 +214,26 @@ inputs without you writing a schema.
 
 ```bash
 python manage.py check                          # validate the whole project
+python manage.py inspectdata data/reviews.csv    # declare a Dataset from a file
 python manage.py dataset head reviews.Reviews   # peek at the data
 python manage.py dataset materialize reviews.Reviews
 python manage.py makemigrations && python manage.py migrate
 python manage.py train reviews.Sentiment -p C=2.0 --tag baseline
+python manage.py predict reviews.Sentiment "loved every minute"
 python manage.py runs list
 python manage.py runs compare 7c8f1020 c089b7e6
 python manage.py evaluate reviews.Accuracy --min-pass-rate 0.9
 python manage.py agent support.Support           # interactive session
 python manage.py traces show a1b2c3d4            # replay an agent call
 python manage.py shell                           # everything pre-imported
+python manage.py test                            # against a throwaway metastore
 python manage.py runserver
 ```
+
+`inspectdata` is Django's `inspectdb` for data files: it samples a CSV, JSONL or
+Parquet file and prints a `Dataset` with the field types, ranges, label classes
+and primary key already filled in, so your first declaration is an edit rather
+than a blank page.
 
 Apps can ship their own commands in `<app>/management/commands/`, and they
 appear in `manage.py help` automatically — including overriding a built-in.

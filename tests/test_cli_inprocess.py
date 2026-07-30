@@ -386,6 +386,287 @@ class TestStartApp:
         assert "already exists and is not empty" in capsys.readouterr().err
 
 
+class TestInspectData:
+    @pytest.fixture(scope="class")
+    def csv_file(self, live_project):
+        path = live_project / "incoming.csv"
+        lines = ["id,body,stars,country,verified,label"]
+        for index in range(30):
+            positive = index % 2 == 0
+            lines.append(
+                f"{index + 1},"
+                f'"a review of some length written out here, number {index}",'
+                f"{(index % 5) + 1},{'GB' if positive else 'US'},"
+                f"{'true' if positive else 'false'},{'pos' if positive else 'neg'}"
+            )
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return path
+
+    def test_it_prints_a_declaration(self, csv_file, capsys):
+        assert run("inspectdata", "incoming.csv") == 0
+
+        out = capsys.readouterr().out
+        assert "class Incoming(Dataset):" in out
+        assert 'label = LabelField(["neg", "pos"])' in out
+        assert "verified = BooleanField()" in out
+
+    def test_the_summary_names_the_key_and_target(self, csv_file, capsys):
+        run("inspectdata", "incoming.csv")
+        out = capsys.readouterr().out
+        assert "primary_key  id" in out
+        assert "target       label" in out
+
+    def test_a_jsonl_file(self, live_project, capsys):
+        path = live_project / "rows.jsonl"
+        path.write_text(
+            "\n".join(
+                f'{{"id": {i}, "note": "some text {i}", "tier": "{"a" if i % 2 else "b"}"}}'
+                for i in range(10)
+            ),
+            encoding="utf-8",
+        )
+        assert run("inspectdata", "rows.jsonl") == 0
+        assert "JSONLSource" in capsys.readouterr().out
+
+    def test_a_custom_name(self, csv_file, capsys):
+        assert run("inspectdata", "incoming.csv", "--name", "Feedback") == 0
+        assert "class Feedback(Dataset):" in capsys.readouterr().out
+
+    def test_a_name_that_is_not_an_identifier(self, csv_file, capsys):
+        assert run("inspectdata", "incoming.csv", "--name", "not a class") == 1
+        assert "not a valid class name" in capsys.readouterr().err
+
+    def test_the_sample_size(self, csv_file, capsys):
+        assert run("inspectdata", "incoming.csv", "-n", "5") == 0
+        out = capsys.readouterr().out
+        assert "Read 5 rows." in out
+        assert "min_value=1, max_value=5" in out
+
+    def test_a_sample_of_zero_is_refused(self, csv_file, capsys):
+        assert run("inspectdata", "incoming.csv", "-n", "0") == 1
+        assert "at least 1" in capsys.readouterr().err
+
+    def test_a_missing_file(self, live_project, capsys):
+        assert run("inspectdata", "nope.csv") == 1
+        assert "No such file" in capsys.readouterr().err
+
+    def test_an_unsupported_extension(self, live_project, capsys):
+        (live_project / "sheet.xlsx").write_text("nope", encoding="utf-8")
+        assert run("inspectdata", "sheet.xlsx") == 1
+        assert "Recognised extensions" in capsys.readouterr().err
+
+    def test_an_empty_file(self, live_project, capsys):
+        (live_project / "empty.jsonl").write_text("", encoding="utf-8")
+        assert run("inspectdata", "empty.jsonl") == 1
+        assert "no records" in capsys.readouterr().err
+
+    def test_awkward_column_names_are_warned_about(self, live_project, capsys):
+        path = live_project / "awkward.csv"
+        path.write_text("Review Text,label\nhello there,a\nhi again,b\n", encoding="utf-8")
+
+        assert run("inspectdata", "awkward.csv") == 0
+        out = capsys.readouterr().out
+        assert "review_text" in out
+        assert "not a valid Python name" in out
+
+    def test_write_needs_an_app(self, csv_file, capsys):
+        assert run("inspectdata", "incoming.csv", "--write") == 1
+        assert "--write needs --app" in capsys.readouterr().err
+
+    def test_write_rejects_an_app_that_does_not_exist(self, csv_file, capsys):
+        assert run("inspectdata", "incoming.csv", "--write", "--app", "ghost") == 1
+        assert "No such app directory" in capsys.readouterr().err
+
+    def test_write_refuses_to_clobber(self, csv_file, capsys):
+        assert run("inspectdata", "incoming.csv", "--write", "--app", "demo") == 1
+        err = capsys.readouterr().err
+        assert "already declares something" in err
+        assert "--force" in err
+
+    def test_write_with_force(self, csv_file, live_project, capsys):
+        run("startapp", "written_app", "-v", "0")
+        capsys.readouterr()
+
+        assert run("inspectdata", "incoming.csv", "--write", "--app", "written_app") == 0
+        written = (live_project / "written_app" / "datasets.py").read_text(encoding="utf-8")
+        assert "class Incoming(Dataset):" in written
+        assert "Wrote" in capsys.readouterr().out
+
+    def test_the_generated_file_is_importable(self, csv_file, live_project):
+        """The point of the command is a file you can actually use."""
+        import ast
+
+        from mlango.data.inspect import profile_source, render_declaration, source_for
+
+        source, expression = source_for("incoming.csv")
+        declaration = render_declaration(
+            profile_source(source), name="Incoming", source_expr=expression
+        )
+        tree = ast.parse(declaration)
+        classes = [n.name for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
+        assert classes == ["Incoming", "Meta"]
+
+
+class TestPredict:
+    def test_a_literal_input(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "an absolute delight") == 0
+        out = capsys.readouterr().out
+        assert "prediction" in out
+        assert "1 prediction(s)." in out
+
+    def test_probabilities(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "wonderful", "--proba") == 0
+        assert "probabilities" in capsys.readouterr().out
+
+    def test_the_declared_dataset(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "--dataset", "-n", "5") == 0
+        assert "5 prediction(s)." in capsys.readouterr().out
+
+    def test_a_filter(self, live_trained, capsys):
+        assert (
+            run("predict", "demo.Sentiment", "--dataset", "--filter", "label=pos", "-n", "3") == 0
+        )
+        assert "3 prediction(s)." in capsys.readouterr().out
+
+    def test_a_numeric_filter_is_coerced(self, live_trained, capsys):
+        """`--filter stars=5` has to compare as a number, not a string."""
+        assert run("predict", "demo.Sentiment", "--dataset", "--filter", "id=1") == 0
+        assert "1 prediction(s)." in capsys.readouterr().out
+
+    def test_a_filter_matching_nothing(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "--dataset", "--filter", "label=zzz") == 1
+        err = capsys.readouterr().err
+        assert "Filters applied: label=zzz" in err
+        assert "dataset head" in err
+
+    def test_a_malformed_filter(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "--dataset", "--filter", "label") == 1
+        assert "FIELD=VALUE" in capsys.readouterr().err
+
+    def test_an_unknown_filter_field(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "--dataset", "--filter", "nope=1") == 1
+        assert "has no field" in capsys.readouterr().err
+
+    def test_a_file(self, live_trained, live_project, capsys):
+        path = live_project / "score.jsonl"
+        path.write_text(
+            '{"id": 1, "text": "wonderful and warm"}\n{"id": 2, "text": "dull and dreadful"}\n',
+            encoding="utf-8",
+        )
+        assert run("predict", "demo.Sentiment", "--file", "score.jsonl") == 0
+        assert "2 prediction(s)." in capsys.readouterr().out
+
+    def test_a_file_limited(self, live_trained, live_project, capsys):
+        assert run("predict", "demo.Sentiment", "--file", "score.jsonl", "-n", "1") == 0
+        assert "1 prediction(s)." in capsys.readouterr().out
+
+    def test_a_file_missing_the_features(self, live_trained, live_project, capsys):
+        path = live_project / "wrong.jsonl"
+        path.write_text('{"id": 1, "body": "wonderful"}\n', encoding="utf-8")
+
+        assert run("predict", "demo.Sentiment", "--file", "wrong.jsonl") == 1
+        err = capsys.readouterr().err
+        assert "needs text" in err
+        assert "Columns found: body, id" in err
+
+    def test_an_empty_file(self, live_trained, live_project, capsys):
+        (live_project / "nothing.jsonl").write_text("", encoding="utf-8")
+        assert run("predict", "demo.Sentiment", "--file", "nothing.jsonl") == 1
+        assert "contained no records" in capsys.readouterr().err
+
+    def test_a_missing_file(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "--file", "ghost.jsonl") == 1
+        assert "No such file" in capsys.readouterr().err
+
+    def test_an_unreadable_extension(self, live_trained, live_project, capsys):
+        (live_project / "data.xlsx").write_text("nope", encoding="utf-8")
+        assert run("predict", "demo.Sentiment", "--file", "data.xlsx") == 1
+        assert "Recognised extensions" in capsys.readouterr().err
+
+    def test_jsonl_output(self, live_trained, capsys):
+        import json
+
+        assert run("predict", "demo.Sentiment", "--dataset", "-n", "3", "--format", "jsonl") == 0
+        lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("{")]
+        rows = [json.loads(ln) for ln in lines]
+        assert len(rows) == 3
+        assert {"id", "input", "prediction"} <= set(rows[0])
+
+    def test_csv_output(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "--dataset", "-n", "2", "--format", "csv") == 0
+        assert "id,input,prediction" in capsys.readouterr().out
+
+    def test_writing_to_a_file(self, live_trained, live_project, capsys):
+        assert (
+            run(
+                "predict",
+                "demo.Sentiment",
+                "--dataset",
+                "-n",
+                "4",
+                "--format",
+                "jsonl",
+                "--output",
+                "out.jsonl",
+            )
+            == 0
+        )
+        assert (
+            len((live_project / "out.jsonl").read_text(encoding="utf-8").strip().splitlines()) == 4
+        )
+        assert "Wrote 4 prediction" in capsys.readouterr().out
+
+    def test_a_file_target_writes_data_even_in_table_mode(self, live_trained, live_project):
+        """A table is for a terminal; a file wants something parseable."""
+        import json
+
+        assert run("predict", "demo.Sentiment", "--dataset", "-n", "2", "--output", "t.jsonl") == 0
+        lines = (live_project / "t.jsonl").read_text(encoding="utf-8").strip().splitlines()
+        assert json.loads(lines[0])["prediction"]
+
+    def test_csv_to_a_file(self, live_trained, live_project):
+        assert (
+            run(
+                "predict",
+                "demo.Sentiment",
+                "--dataset",
+                "-n",
+                "2",
+                "--format",
+                "csv",
+                "--output",
+                "out.csv",
+            )
+            == 0
+        )
+        body = (live_project / "out.csv").read_text(encoding="utf-8")
+        assert body.splitlines()[0].startswith("id,input,prediction")
+
+    def test_an_explicit_version(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "wonderful", "--version", "1") == 0
+        assert "demo.Sentiment@v1" in capsys.readouterr().out
+
+    def test_a_version_that_does_not_exist(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "wonderful", "--version", "999") == 1
+        assert capsys.readouterr().err
+
+    def test_an_unknown_model(self, live_trained, capsys):
+        assert run("predict", "demo.Nope", "hello") == 1
+        assert "No model named" in capsys.readouterr().err
+
+    def test_no_input(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment") == 1
+        assert "--dataset" in capsys.readouterr().err
+
+    def test_literals_and_dataset_together(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "hello", "--dataset") == 1
+        assert "not both" in capsys.readouterr().err
+
+    def test_file_and_dataset_together(self, live_trained, capsys):
+        assert run("predict", "demo.Sentiment", "--file", "score.jsonl", "--dataset") == 1
+        assert "not both" in capsys.readouterr().err
+
+
 class TestTestCommand:
     def test_a_scaffolded_project_is_green_before_it_is_edited(self, live_project, capsys):
         """startproject ships tests, and they must pass on a fresh checkout."""

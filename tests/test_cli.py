@@ -95,8 +95,10 @@ class TestDiscovery:
             "check",
             "dataset",
             "evaluate",
+            "inspectdata",
             "makemigrations",
             "migrate",
+            "predict",
             "runs",
             "runserver",
             "shell",
@@ -763,6 +765,302 @@ class TestShellCommand:
         )
         assert "runs" in result.stdout
         assert "demo" in result.stdout
+
+
+class TestInspectData:
+    @pytest.fixture(scope="class")
+    def with_csv(self, scaffold):
+        """A CSV that looks like something a user would actually bring."""
+        path = scaffold / "incoming.csv"
+        lines = ["id,body,stars,country,verified,label"]
+        for index in range(40):
+            positive = index % 2 == 0
+            lines.append(
+                f"{index + 1},"
+                f'"a review of some length written out here, number {index}",'
+                f"{(index % 5) + 1},"
+                f"{'GB' if positive else 'US'},"
+                f"{'true' if positive else 'false'},"
+                f"{'pos' if positive else 'neg'}"
+            )
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return scaffold, path
+
+    def test_it_prints_a_declaration_that_parses(self, with_csv):
+        import ast
+
+        project, _path = with_csv
+        result = manage(project, "inspectdata", "incoming.csv")
+
+        declaration = result.stdout.split("\nRead ")[0]
+        ast.parse(declaration)
+        assert "class Incoming(Dataset):" in declaration
+
+    def test_the_types_it_infers(self, with_csv):
+        project, _path = with_csv
+        out = manage(project, "inspectdata", "incoming.csv").stdout
+
+        assert "id = IntegerField(min_value=1, max_value=40)" in out
+        assert "body = TextField()" in out
+        assert "stars = IntegerField(min_value=1, max_value=5)" in out
+        assert "verified = BooleanField()" in out
+        assert 'label = LabelField(["neg", "pos"])' in out
+        assert 'primary_key = "id"' in out
+
+    def test_the_summary_table_explains_the_choices(self, with_csv):
+        project, _path = with_csv
+        out = manage(project, "inspectdata", "incoming.csv").stdout
+
+        assert "distinct" in out
+        assert "primary_key  id" in out
+        assert "target       label" in out
+
+    def test_a_custom_class_name(self, with_csv):
+        project, _path = with_csv
+        out = manage(project, "inspectdata", "incoming.csv", "--name", "Feedback").stdout
+        assert "class Feedback(Dataset):" in out
+
+    def test_the_sample_size_is_respected(self, with_csv):
+        project, _path = with_csv
+        out = manage(project, "inspectdata", "incoming.csv", "-n", "4").stdout
+        assert "Read 4 rows." in out
+        # A range from four rows, not forty.
+        assert "id = IntegerField(min_value=1, max_value=4)" in out
+
+    def test_a_missing_file_is_a_message_not_a_traceback(self, scaffold):
+        result = manage(scaffold, "inspectdata", "nope.csv", expect_success=False)
+        assert result.returncode == 1
+        assert "No such file" in result.stderr
+        assert "Traceback" not in result.stderr
+
+    def test_an_unsupported_extension_lists_what_works(self, scaffold):
+        (scaffold / "book.xlsx").write_text("not really a spreadsheet", encoding="utf-8")
+        result = manage(scaffold, "inspectdata", "book.xlsx", expect_success=False)
+        assert "Recognised extensions" in result.stderr
+        assert ".csv" in result.stderr
+
+    def test_write_needs_an_app(self, with_csv):
+        project, _path = with_csv
+        result = manage(project, "inspectdata", "incoming.csv", "--write", expect_success=False)
+        assert "--write needs --app" in result.stderr
+
+    def test_write_refuses_to_clobber_real_declarations(self, with_csv):
+        project, _path = with_csv
+        result = manage(
+            project,
+            "inspectdata",
+            "incoming.csv",
+            "--write",
+            "--app",
+            "demo",
+            expect_success=False,
+        )
+        assert "already declares something" in result.stderr
+        assert "--force" in result.stderr
+
+    def test_write_into_a_fresh_app(self, with_csv):
+        project, _path = with_csv
+        manage(project, "startapp", "incoming_app", "-v", "0")
+        manage(
+            project,
+            "inspectdata",
+            "incoming.csv",
+            "--write",
+            "--app",
+            "incoming_app",
+            "--force",
+        )
+
+        written = (project / "incoming_app" / "datasets.py").read_text(encoding="utf-8")
+        assert "class Incoming(Dataset):" in written
+        assert "for the incoming_app app" in written
+
+    def test_it_runs_before_anything_is_declared(self, tmp_path):
+        """inspectdata exists to be used on a bare project, so it must not need apps."""
+        from mlango.template import render_project
+
+        bare = tmp_path / "bare"
+        render_project("bareproject", str(bare), demo=False)
+        (bare / "rows.jsonl").write_text(
+            '{"id": 1, "label": "a"}\n{"id": 2, "label": "b"}\n', encoding="utf-8"
+        )
+
+        out = manage(bare, "inspectdata", "rows.jsonl").stdout
+        assert "class Rows(Dataset):" in out
+        assert "JSONLSource" in out
+
+
+class TestPredict:
+    def test_a_literal_input(self, trained):
+        out = manage(trained, "predict", "demo.Sentiment", "an absolute delight").stdout
+        assert "prediction" in out
+        assert "1 prediction(s)." in out
+
+    def test_several_literals(self, trained):
+        out = manage(trained, "predict", "demo.Sentiment", "wonderful", "dreadful").stdout
+        assert "2 prediction(s)." in out
+
+    def test_probabilities_on_request(self, trained):
+        out = manage(trained, "predict", "demo.Sentiment", "wonderful", "--proba").stdout
+        assert "probabilities" in out
+        assert "pos" in out and "neg" in out
+
+    def test_the_loaded_version_is_reported(self, trained):
+        import re
+
+        out = manage(trained, "predict", "demo.Sentiment", "wonderful").stdout
+        # Not a fixed number: earlier tests in this module register versions too.
+        assert re.search(r"demo\.Sentiment@v\d+", out)
+        # Every version starts at "none"; saying so on every call is noise.
+        assert "stage=none" not in out
+
+    def test_an_explicit_version_can_be_asked_for(self, trained):
+        out = manage(trained, "predict", "demo.Sentiment", "wonderful", "--version", "1").stdout
+        assert "demo.Sentiment@v1" in out
+
+    def test_a_version_that_does_not_exist(self, trained):
+        result = manage(
+            trained,
+            "predict",
+            "demo.Sentiment",
+            "wonderful",
+            "--version",
+            "999",
+            expect_success=False,
+        )
+        assert result.returncode == 1
+        assert "Traceback" not in result.stderr
+
+    def test_scoring_the_declared_dataset(self, trained):
+        out = manage(trained, "predict", "demo.Sentiment", "--dataset", "-n", "5").stdout
+        assert "5 prediction(s)." in out
+        assert "id" in out
+
+    def test_filtering_the_dataset(self, trained):
+        out = manage(
+            trained, "predict", "demo.Sentiment", "--dataset", "--filter", "label=pos", "-n", "3"
+        ).stdout
+        assert "3 prediction(s)." in out
+
+    def test_a_filter_that_matches_nothing_says_what_was_applied(self, trained):
+        result = manage(
+            trained,
+            "predict",
+            "demo.Sentiment",
+            "--dataset",
+            "--filter",
+            "label=nonexistent",
+            expect_success=False,
+        )
+        assert "Filters applied: label=nonexistent" in result.stderr
+        assert "dataset head" in result.stderr
+
+    def test_a_malformed_filter(self, trained):
+        result = manage(
+            trained,
+            "predict",
+            "demo.Sentiment",
+            "--dataset",
+            "--filter",
+            "label",
+            expect_success=False,
+        )
+        assert "FIELD=VALUE" in result.stderr
+
+    def test_an_unknown_filter_field(self, trained):
+        result = manage(
+            trained,
+            "predict",
+            "demo.Sentiment",
+            "--dataset",
+            "--filter",
+            "nope=1",
+            expect_success=False,
+        )
+        assert "has no field" in result.stderr
+
+    def test_scoring_a_file(self, trained):
+        path = trained / "to_score.jsonl"
+        path.write_text(
+            '{"id": 1, "text": "wonderful and warm"}\n{"id": 2, "text": "dreadful, dull"}\n',
+            encoding="utf-8",
+        )
+        out = manage(trained, "predict", "demo.Sentiment", "--file", "to_score.jsonl").stdout
+        assert "2 prediction(s)." in out
+
+    def test_a_file_missing_the_model_features_says_which(self, trained):
+        path = trained / "wrong_columns.jsonl"
+        path.write_text('{"id": 1, "body": "wonderful"}\n', encoding="utf-8")
+
+        result = manage(
+            trained,
+            "predict",
+            "demo.Sentiment",
+            "--file",
+            "wrong_columns.jsonl",
+            expect_success=False,
+        )
+        assert "needs text" in result.stderr
+        assert "Columns found: body, id" in result.stderr
+        assert "Traceback" not in result.stderr
+
+    def test_jsonl_output_is_machine_readable(self, trained):
+        import json
+
+        out = manage(
+            trained, "predict", "demo.Sentiment", "--dataset", "-n", "3", "--format", "jsonl"
+        ).stdout
+        rows = [json.loads(line) for line in out.splitlines() if line.startswith("{")]
+        assert len(rows) == 3
+        assert {"id", "input", "prediction"} <= set(rows[0])
+
+    def test_csv_output(self, trained):
+        out = manage(
+            trained, "predict", "demo.Sentiment", "--dataset", "-n", "2", "--format", "csv"
+        ).stdout
+        assert "id,input,prediction" in out
+
+    def test_writing_to_a_file(self, trained):
+        manage(
+            trained,
+            "predict",
+            "demo.Sentiment",
+            "--dataset",
+            "-n",
+            "4",
+            "--format",
+            "jsonl",
+            "--output",
+            "scored.jsonl",
+        )
+        written = (trained / "scored.jsonl").read_text(encoding="utf-8").strip().splitlines()
+        assert len(written) == 4
+
+    def test_a_file_target_never_gets_a_terminal_table(self, trained):
+        """--output with the default format must still write data, not a table."""
+        import json
+
+        manage(
+            trained, "predict", "demo.Sentiment", "--dataset", "-n", "2", "--output", "plain.jsonl"
+        )
+        lines = (trained / "plain.jsonl").read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) == 2
+        assert json.loads(lines[0])["prediction"]
+
+    def test_an_untrained_model_says_how_to_train_it(self, migrated):
+        result = manage(migrated, "predict", "demo.Untrained", expect_success=False)
+        assert result.returncode == 1
+        assert "No model named" in result.stderr
+
+    def test_no_input_at_all_says_what_to_pass(self, trained):
+        result = manage(trained, "predict", "demo.Sentiment", expect_success=False)
+        assert "--dataset" in result.stderr
+
+    def test_conflicting_inputs_are_refused(self, trained):
+        result = manage(
+            trained, "predict", "demo.Sentiment", "hello", "--dataset", expect_success=False
+        )
+        assert "not both" in result.stderr
 
 
 class TestTestCommand:

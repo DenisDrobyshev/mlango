@@ -30,6 +30,18 @@ or a dead link. That is what makes incremental contribution safe.
 3. Build and look at it: `mkdocs serve` then open the language switcher.
 4. Open a pull request titled `docs(i18n): translate models.md to ru`.
 
+!!! warning "Give linked headings an explicit anchor"
+    A heading written in a non-Latin script slugifies to a positional anchor like
+    `_3`, which shifts as soon as a section is added above it. If anything links
+    to the heading, pin the English page's anchor onto it:
+
+    ```markdown
+    ### Свои данные { #bringing-your-own-data }
+    ```
+
+    Then `[text](cli.md#bringing-your-own-data)` lands correctly in every
+    language.
+
 ## Adding a new language
 
 Add a locale block to `mkdocs.yml` under the `i18n` plugin:

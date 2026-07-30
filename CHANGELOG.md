@@ -8,6 +8,25 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **`manage.py inspectdata`** — Django's `inspectdb`, for data files. Point it at
+  a CSV, TSV, JSONL, JSON or Parquet file and it samples the rows and prints a
+  `Dataset` declaration: field types, numeric ranges, label classes, nullability,
+  the primary key and the likely target. `--write --app myapp` puts it straight
+  into `myapp/datasets.py`. It needs no declarations of its own, so it runs on a
+  project you have only just created — which is the point, because bringing your
+  own data was the one step that still meant writing a field per column by hand.
+
+  Exactly one column becomes a target, since two would leave `Model.get_target()`
+  unable to choose. A `max_length` is only imposed when every sampled value is
+  short: a limit that turns out too small rejects valid data later, while
+  `TextField` never rejects anything.
+- **`manage.py predict`** — score data without starting a server, using the
+  registered version the API would serve. Takes literal values, `--file`, or
+  `--dataset` with repeatable `--filter FIELD=VALUE`; emits a table, JSONL or CSV,
+  to stdout or `--output`. An `id`/`uuid`/`pk` on the input is carried through so
+  a scored file can be joined back to its source. Data missing a feature the
+  model needs is reported by column name, instead of failing inside a vectoriser.
+
 - **Transformers trainer** (`mlango[transformers]`) — fine-tune a pretrained
   encoder for text classification or regression. The loop is mlango's own, so
   callbacks, early stopping, metric recording and run tracking behave the same
@@ -56,6 +75,9 @@ All notable changes to this project are documented here. The format follows
   not only `MLANGO_SETTINGS_MODULE`. Notebooks and test suites could not run a
   command at all before this.
 - A missing run, trace or object in the admin answers `404` instead of `200`.
+- Documentation headings that other pages link to now carry explicit anchors. A
+  Cyrillic heading slugifies to a positional anchor (`_3`) that moves whenever a
+  section is added above it, so every cross-language link to one was fragile.
 
 ### Fixed
 

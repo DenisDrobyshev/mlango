@@ -18,6 +18,62 @@ python manage.py help train
 | `manage.py startapp NAME` | Создаёт приложение: datasets, models, agents, evals, admin, migrations, tests |
 | `manage.py check` | Проверяет настройки, бэкенды, связи, миграции и админку |
 
+### Свои данные { #bringing-your-own-data }
+
+В Django есть `inspectdb` для существующей базы. Здесь то же самое для файла:
+команда читает выборку и печатает `Dataset`, который можно вставить в
+`datasets.py` — так первое объявление становится правкой, а не пустым листом.
+
+```bash
+python manage.py inspectdata data/reviews.csv
+python manage.py inspectdata data/reviews.csv --name Feedback -n 5000
+python manage.py inspectdata data/reviews.csv --write --app reviews
+```
+
+Читает `.csv`, `.tsv`, `.jsonl`, `.ndjson`, `.json` и `.parquet`. Своих
+объявлений ей не нужно, поэтому она работает на только что созданном проекте.
+
+```python
+class Reviews(Dataset):
+    """40 rows, 6 columns."""
+
+    id = IntegerField(min_value=1, max_value=40)
+    body = TextField()
+    stars = IntegerField(min_value=1, max_value=5)
+    country = CharField(max_length=16, choices=["GB", "US"])
+    verified = BooleanField()
+    label = LabelField(["neg", "pos"])
+
+    class Meta:
+        source = CSVSource("data/reviews.csv")
+        primary_key = "id"
+```
+
+Как она решает:
+
+| Признак | Становится |
+|---|---|
+| Все значения — целые числа | `IntegerField` с наблюдённым диапазоном |
+| Хоть одно значение с точкой | `FloatField` с наблюдённым диапазоном |
+| `true`/`yes`/`t`/`on` и противоположные | `BooleanField` |
+| dict, list или строка, разбираемая как они | `JSONField` |
+| Метки времени в ISO | `DateTimeField` |
+| Мало различных значений, и они повторяются | `CharField(choices=…)` |
+| Хоть одно значение длиннее 32 символов | `TextField` |
+| Колонка с именем `label`, `target`, `y`, `class`… | `LabelField` или `TargetField` |
+| Уникальная колонка `id`, `uuid` или `*_id` | `Meta.primary_key` |
+| Часть значений пуста | `null=True, required=False` |
+
+Два правила, которые стоит знать. **Целевой становится ровно одна колонка** —
+две оставили бы `Model.get_target()` без выбора, поэтому остальные категориальные
+остаются `CharField` с `choices`. И `max_length` выставляется только когда все
+значения в выборке короткие: слишком маленький предел позже отвергнет валидные
+данные, а `TextField` не отвергает ничего.
+
+Это отправная точка, а не истина. Всё, что она угадала, помечено комментарием, а
+имя колонки, которое не может быть атрибутом Python, названо явно, а не молча
+искажено.
+
 ### Данные
 
 ```bash
@@ -55,6 +111,38 @@ python manage.py sweep reviews.Sentiment -p C=0.25,1,4 \
 | `--seed N` | Переопределяет seed |
 | `--materialize` | Сначала фиксирует обучающую выборку как версию датасета |
 | `--no-register` | Обучает, не добавляя в реестр версий |
+
+### Предсказание { #prediction }
+
+Оценка без запуска сервера. Модель берётся из реестра версий, то есть работает
+тот же артефакт, который отдавал бы API.
+
+```bash
+python manage.py predict reviews.Sentiment "понравилось от начала до конца"
+python manage.py predict reviews.Sentiment "отлично" "ужасно" --proba
+
+python manage.py predict reviews.Sentiment --dataset -n 100
+python manage.py predict reviews.Sentiment --dataset --filter label=pos
+
+python manage.py predict reviews.Sentiment --file incoming.jsonl \
+    --format jsonl --output scored.jsonl
+```
+
+| Флаг | Что делает |
+|---|---|
+| `--dataset` | Оценить объявленный датасет модели |
+| `--filter FIELD=VALUE` | Сузить датасет. Можно повторять |
+| `--file PATH` | Оценить файл csv/tsv/jsonl/json/parquet |
+| `-n N` | Остановиться после N записей |
+| `--version N` / `--stage NAME` | Какую версию из реестра загрузить |
+| `--proba` | Добавить вероятности классов |
+| `--format table\|jsonl\|csv` | Как выводить |
+| `--output PATH` | Записать в файл вместо stdout |
+
+Если во входных данных есть `id`, `uuid` или `pk`, он попадает в вывод — так
+оценённый файл можно соединить с источником. Если в данных нет признака, который
+нужен модели, команда назовёт отсутствующую колонку и перечислит имеющиеся,
+вместо того чтобы уронить тренер где-то внутри векторизатора.
 
 ### Оценка
 

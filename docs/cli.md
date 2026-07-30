@@ -18,6 +18,62 @@ python manage.py help train
 | `manage.py startapp NAME` | Scaffold an app: datasets, models, agents, evals, admin, migrations |
 | `manage.py check` | Validate settings, backends, wiring, migrations and the admin |
 
+### Bringing your own data
+
+Django has `inspectdb` for an existing database. This is the same idea for a
+data file: it samples the file and prints a `Dataset` you can paste into
+`datasets.py`, so your first declaration is an edit rather than a blank page.
+
+```bash
+python manage.py inspectdata data/reviews.csv
+python manage.py inspectdata data/reviews.csv --name Feedback -n 5000
+python manage.py inspectdata data/reviews.csv --write --app reviews
+```
+
+Reads `.csv`, `.tsv`, `.jsonl`, `.ndjson`, `.json` and `.parquet`. It needs no
+declarations of its own, so it works on a project you have only just created.
+
+```python
+class Reviews(Dataset):
+    """40 rows, 6 columns."""
+
+    id = IntegerField(min_value=1, max_value=40)
+    body = TextField()
+    stars = IntegerField(min_value=1, max_value=5)
+    country = CharField(max_length=16, choices=["GB", "US"])
+    verified = BooleanField()
+    label = LabelField(["neg", "pos"])
+
+    class Meta:
+        source = CSVSource("data/reviews.csv")
+        primary_key = "id"
+```
+
+What it decides, and why:
+
+| Signal | Becomes |
+|---|---|
+| All values parse as whole numbers | `IntegerField` with the observed range |
+| Any value has a decimal point | `FloatField` with the observed range |
+| `true`/`yes`/`t`/`on` and their opposites | `BooleanField` |
+| A dict, a list, or a string parsing as either | `JSONField` |
+| ISO timestamps | `DateTimeField` |
+| Few distinct values, and they repeat | `CharField(choices=…)` |
+| Any value longer than 32 characters | `TextField` |
+| A column named `label`, `target`, `y`, `class`… | `LabelField` or `TargetField` |
+| A unique column named `id`, `uuid` or `*_id` | `Meta.primary_key` |
+| Some values missing | `null=True, required=False` |
+
+Two rules worth knowing. **Exactly one column becomes a target** — declaring two
+would leave `Model.get_target()` unable to choose, so other categorical columns
+stay `CharField` with `choices`. And a column is only given a `max_length` when
+every sampled value is short, because a limit that turns out to be too small
+rejects valid data later, while `TextField` never rejects anything.
+
+It is a starting point, not an oracle. Anything it guessed at carries a comment
+saying so, and a column name that cannot be a Python attribute is reported
+rather than silently mangled.
+
 ### Data
 
 ```bash
@@ -55,6 +111,39 @@ python manage.py sweep reviews.Sentiment -p C=0.25,1,4 \
 | `--seed N` | Override the seed |
 | `--materialize` | Freeze the training view into a dataset version first |
 | `--no-register` | Train without adding to the registry |
+
+### Prediction
+
+Scoring without starting a server. The model comes from the registry, so this
+runs the same artefact the API would serve.
+
+```bash
+python manage.py predict reviews.Sentiment "loved every minute of it"
+python manage.py predict reviews.Sentiment "great" "awful" --proba
+
+python manage.py predict reviews.Sentiment --dataset -n 100
+python manage.py predict reviews.Sentiment --dataset --filter label=pos
+
+python manage.py predict reviews.Sentiment --file incoming.jsonl \
+    --format jsonl --output scored.jsonl
+```
+
+| Flag | Effect |
+|---|---|
+| `--dataset` | Score the model's own declared dataset |
+| `--filter FIELD=VALUE` | Narrow the dataset. Repeatable |
+| `--file PATH` | Score a csv/tsv/jsonl/json/parquet file |
+| `-n N` | Stop after N records |
+| `--version N` / `--stage NAME` | Which registered version to load |
+| `--proba` | Include class probabilities |
+| `--format table\|jsonl\|csv` | How to print it |
+| `--output PATH` | Write to a file instead of stdout |
+
+An `id`, `uuid` or `pk` on the input is carried through to the output, so a
+scored file can be joined back to where it came from. If the data is missing a
+feature the model needs, the command says which column is absent and what the
+data does have — rather than letting the trainer fail somewhere deep inside a
+vectoriser.
 
 ### Evaluation
 

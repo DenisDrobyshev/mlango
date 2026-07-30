@@ -33,6 +33,14 @@ class Reviews(Dataset):
 | `description` | Defaults to the class docstring's first paragraph |
 | `license`, `homepage` | Provenance, shown in the admin |
 
+!!! tip "Already have a file? Do not write this by hand"
+    ```bash
+    python manage.py inspectdata data/reviews.jsonl
+    ```
+    samples the file and prints a declaration like the one above, with the field
+    types, the ranges, the classes and the primary key filled in. See
+    [Bringing your own data](cli.md#bringing-your-own-data).
+
 ## Sources
 
 | Source | Reads |
