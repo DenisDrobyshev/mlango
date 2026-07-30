@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "quickstart",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["examples/quickstart/manage.py", "runserver", "8010"],
+      "port": 8010
+    }
+  ]
+}

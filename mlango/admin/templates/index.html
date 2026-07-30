@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}{{ site_title }} — overview{% endblock %}
+
+{% block content %}
+<h1>Overview</h1>
+<p class="subtitle">Everything this project declares, and everything it has run.</p>
+
+<div class="grid" style="margin-bottom:1.1rem">
+  {% for kind, n in counts.items() %}
+    <div class="stat"><div class="n">{{ n }}</div><div class="k">{{ kind }}s</div></div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h2>Recent runs <span class="count">· <a href="{{ admin_url }}/runs">see all</a></span></h2>
+  {% if runs %}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Run</th><th>Kind</th><th>Target</th><th>Status</th><th>Started</th><th>Duration</th></tr></thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td><a class="mono" href="{{ admin_url }}/runs/{{ run.uuid }}">{{ run.short_id }}</a></td>
+        <td>{{ run.kind }}</td>
+        <td>{{ run.target }}</td>
+        <td><span class="tag {{ run.status }}">{{ run.status }}</span></td>
+        <td>{{ run.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="num">{{ run.duration_s | duration }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">No runs yet. Try <code>python manage.py train &lt;Model&gt;</code>.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Recent agent traces <span class="count">· <a href="{{ admin_url }}/traces">see all</a></span></h2>
+  {% if traces %}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Trace</th><th>Agent</th><th>Input</th><th>Steps</th><th>Tokens</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for t in traces %}
+      <tr>
+        <td><a class="mono" href="{{ admin_url }}/traces/{{ t.uuid }}">{{ t.short_id }}</a></td>
+        <td>{{ t.agent }}</td>
+        <td>{{ t.input | short(70) }}</td>
+        <td class="num">{{ t.steps }}</td>
+        <td class="num">{{ t.total_tokens | number }}</td>
+        <td><span class="tag {{ t.status }}">{{ t.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">No agent traces yet.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Latest model versions <span class="count">· <a href="{{ admin_url }}/versions">see all</a></span></h2>
+  {% if versions %}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Model</th><th>Version</th><th>Stage</th><th>Metrics</th><th>Created</th></tr></thead>
+    <tbody>
+      {% for v in versions %}
+      <tr>
+        <td><a href="{{ admin_url }}/o/{{ v.label }}">{{ v.label }}</a></td>
+        <td class="num">v{{ v.version }}</td>
+        <td><span class="tag {{ v.stage }}">{{ v.stage }}</span></td>
+        <td class="mono">{% for k, val in (v.metrics or {}).items() %}{{ k }}={{ val | number }} {% endfor %}</td>
+        <td>{{ v.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">No registered model versions yet.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Latest dataset versions</h2>
+  {% if datasets %}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Dataset</th><th>Version</th><th>Rows</th><th>Content hash</th><th>Created</th></tr></thead>
+    <tbody>
+      {% for d in datasets %}
+      <tr>
+        <td><a href="{{ admin_url }}/o/{{ d.label }}">{{ d.label }}</a></td>
+        <td class="num">v{{ d.version }}</td>
+        <td class="num">{{ d.row_count | number }}</td>
+        <td class="mono">{{ (d.content_hash or '')[:12] }}</td>
+        <td>{{ d.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">Nothing materialised yet. Try <code>python manage.py dataset materialize &lt;Dataset&gt;</code>.</p>{% endif %}
+</div>
+{% endblock %}

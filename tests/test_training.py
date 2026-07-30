@@ -1,0 +1,288 @@
+"""Models, trainers, runs and the model registry."""
+
+from __future__ import annotations
+
+import pytest
+
+from mlango.core import fields
+from mlango.core.exceptions import ImproperlyConfigured
+from mlango.metastore.models import Stage
+from mlango.training import Model, metrics
+from mlango.training.callbacks import Callback, CallbackList, EarlyStopping
+
+
+@pytest.fixture(scope="module")
+def sentiment(reviews, sklearn_or_skip):
+    """Declared once for the module: labels are unique, so redeclaring would clash."""
+
+    class Sentiment(Model):
+        """TF-IDF into logistic regression."""
+
+        max_features = fields.IntegerField(default=500, tunable=True)
+        C = fields.FloatField(default=1.0, min_value=0.0, tunable=True)
+
+        class Meta:
+            dataset = reviews
+            trainer = "sklearn"
+            task = "classification"
+            features = ["text"]
+
+        def build(self):
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.linear_model import LogisticRegression
+            from sklearn.pipeline import make_pipeline
+
+            return make_pipeline(
+                TfidfVectorizer(max_features=self.max_features),
+                LogisticRegression(C=self.C, max_iter=1000),
+            )
+
+    return Sentiment
+
+
+class TestDeclaration:
+    def test_hyperparameters_are_fields(self, sentiment):
+        assert sentiment._meta.field_names == ["max_features", "C"]
+
+    def test_tunable_fields_are_marked(self, sentiment):
+        assert [f.name for f in sentiment._meta.tunable_fields] == ["max_features", "C"]
+
+    def test_params_are_validated(self, sentiment):
+        with_override = sentiment(C=2.5)
+        assert with_override.params == {"max_features": 500, "C": 2.5}
+
+    def test_out_of_range_param_is_rejected(self, sentiment):
+        from mlango.core.exceptions import ValidationError
+
+        with pytest.raises(ValidationError):
+            sentiment(C=-1).full_clean()
+
+    def test_primary_key_is_excluded_from_features(self, reviews, sklearn_or_skip):
+        class Implicit(Model):
+            class Meta:
+                dataset = reviews
+                trainer = "sklearn"
+
+            def build(self):
+                return None
+
+        # `id` is the primary key and `label` the target, so neither is a feature.
+        assert Implicit.get_features() == ["text", "stars"]
+
+    def test_missing_trainer_is_reported(self, reviews):
+        class NoTrainer(Model):
+            class Meta:
+                dataset = reviews
+
+            def build(self):
+                return None
+
+        with pytest.raises(ImproperlyConfigured, match="Meta.trainer"):
+            NoTrainer.get_trainer()
+
+    def test_missing_build_is_reported(self, reviews):
+        class NoBuild(Model):
+            class Meta:
+                dataset = reviews
+                trainer = "sklearn"
+
+        with pytest.raises(NotImplementedError, match="must implement build"):
+            NoBuild().build()
+
+
+class TestTraining:
+    def test_end_to_end(self, project, sentiment):
+        model = sentiment(C=2.0)
+        run = model.train(tags=["unit"])
+
+        record = run.refresh()
+        assert record.status == "finished"
+        assert record.kind == "train"
+        assert record.summary["accuracy"] == pytest.approx(1.0)
+        assert record.tags == ["unit"]
+
+    def test_run_captures_reproducibility_metadata(self, project, sentiment):
+        run = sentiment().train()
+        record = run.refresh()
+        assert record.seed == 0
+        assert record.python_version
+        assert record.params["_data_fingerprint"]
+        assert record.params["_features"] == ["text"]
+
+    def test_predict_after_training(self, project, sentiment):
+        model = sentiment()
+        model.train()
+        assert model.predict("great movie 1") == "pos"
+        assert model.predict(["terrible movie 3"]) == ["neg"]
+
+    def test_predict_proba_returns_class_map(self, project, sentiment):
+        model = sentiment()
+        model.train()
+        proba = model.predict_proba("great movie 1")
+        assert set(proba) == {"neg", "pos"}
+        assert sum(proba.values()) == pytest.approx(1.0)
+
+    def test_predicting_before_training_explains_itself(self, project, sentiment):
+        from mlango.core.exceptions import RunError
+
+        with pytest.raises(RunError, match="no fitted weights"):
+            sentiment().predict("anything")
+
+    def test_metrics_are_recorded(self, project, sentiment):
+        from mlango.training import metric_keys
+
+        run = sentiment().train()
+        keys = metric_keys(run.run_id)
+        assert "accuracy" in keys
+        assert "val_accuracy" in keys
+
+
+class TestVersions:
+    def test_training_registers_a_version(self, project, sentiment):
+        model = sentiment()
+        model.train()
+        assert model._version.version == 1
+        assert model._version.stage == Stage.NONE
+
+    def test_versions_increment(self, project, sentiment):
+        sentiment().train()
+        second = sentiment(C=3.0)
+        second.train()
+        assert second._version.version == 2
+
+    def test_load_restores_hyperparameters(self, project, sentiment):
+        sentiment(C=2.5).train()
+        loaded = sentiment.load()
+        assert loaded.C == 2.5
+        assert loaded.predict("great movie 1") == "pos"
+
+    def test_promote_demotes_the_incumbent(self, project, sentiment):
+        sentiment().train()
+        sentiment(C=2.0).train()
+        sentiment.promote(1, Stage.PRODUCTION)
+        sentiment.promote(2, Stage.PRODUCTION)
+
+        stages = {v.version: v.stage for v in sentiment.versions()}
+        assert stages[2] == Stage.PRODUCTION
+        assert stages[1] == Stage.ARCHIVED
+
+    def test_production_loads_the_promoted_version(self, project, sentiment):
+        sentiment().train()
+        sentiment.promote(1, Stage.PRODUCTION)
+        assert sentiment.production()._version.version == 1
+
+    def test_unknown_stage_is_rejected(self, project, sentiment):
+        sentiment().train()
+        with pytest.raises(ValueError, match="Unknown stage"):
+            sentiment.promote(1, "sideways")
+
+    def test_no_register_skips_the_registry(self, project, sentiment):
+        model = sentiment()
+        model.train(register=False)
+        assert model._version is None
+        assert sentiment.versions() == []
+
+
+class TestFailures:
+    def test_a_failing_build_marks_the_run_failed(self, project, reviews):
+        from mlango.core.exceptions import RunError
+
+        class Broken(Model):
+            class Meta:
+                dataset = reviews
+                trainer = "sklearn"
+                features = ["text"]
+
+            def build(self):
+                raise ZeroDivisionError("boom")
+
+        with pytest.raises(RunError, match="boom"):
+            Broken().train()
+
+        from mlango.training import recent_runs
+
+        latest = recent_runs(limit=1)[0]
+        assert latest.status == "failed"
+        assert "ZeroDivisionError" in latest.error
+
+
+class TestCallbacks:
+    def test_hooks_fire_in_order(self, project, sentiment):
+        seen = []
+
+        class Recorder(Callback):
+            def on_train_begin(self, run, model, **kwargs):
+                seen.append("begin")
+
+            def on_epoch_end(self, run, epoch, metrics, **kwargs):
+                seen.append("epoch")
+
+            def on_train_end(self, run, model, **kwargs):
+                seen.append("end")
+
+        sentiment().train(callbacks=[Recorder()])
+        assert seen == ["begin", "epoch", "end"]
+
+    def test_a_failing_callback_does_not_break_the_run(self, project, sentiment):
+        class Exploding(Callback):
+            def on_epoch_end(self, run, epoch, metrics, **kwargs):
+                raise RuntimeError("instrumentation should never kill a run")
+
+        run = sentiment().train(callbacks=[Exploding()])
+        assert run.refresh().status == "finished"
+
+    def test_early_stopping_sets_the_stop_flag(self):
+        class FakeRun:
+            should_stop = False
+
+            def add_tag(self, tag):
+                pass
+
+        stopper = EarlyStopping(monitor="val_loss", patience=2, mode="min")
+        run = FakeRun()
+        stopper.on_epoch_end(run, 1, {"val_loss": 1.0})
+        stopper.on_epoch_end(run, 2, {"val_loss": 2.0})
+        assert run.should_stop is False
+        stopper.on_epoch_end(run, 3, {"val_loss": 2.0})
+        assert run.should_stop is True
+
+    def test_callback_list_isolates_failures(self):
+        class Bad(Callback):
+            def on_train_begin(self, run, model, **kwargs):
+                raise RuntimeError
+
+        class Good(Callback):
+            called = False
+
+            def on_train_begin(self, run, model, **kwargs):
+                type(self).called = True
+
+        CallbackList([Bad(), Good()]).emit("on_train_begin", None, None)
+        assert Good.called is True
+
+
+class TestMetrics:
+    def test_accuracy(self):
+        assert metrics.accuracy(["a", "b"], ["a", "b"]) == 1.0
+        assert metrics.accuracy(["a", "b"], ["a", "a"]) == 0.5
+
+    def test_f1_is_between_zero_and_one(self):
+        value = metrics.f1(["a", "b", "a"], ["a", "b", "b"])
+        assert 0.0 <= value <= 1.0
+
+    def test_classification_report_shape(self):
+        report = metrics.classification_report(["a", "b"], ["a", "b"])
+        assert set(report) >= {"accuracy", "f1_macro", "per_class", "confusion", "support"}
+
+    def test_regression_metrics(self):
+        assert metrics.mse([1.0, 2.0], [1.0, 2.0]) == 0.0
+        assert metrics.r2([1.0, 2.0, 3.0], [1.0, 2.0, 3.0]) == pytest.approx(1.0)
+
+    def test_flatten_keeps_only_scalars(self):
+        flat = metrics.flatten_report(metrics.classification_report(["a"], ["a"]))
+        assert "per_class" not in flat
+        assert flat["accuracy"] == 1.0
+
+    def test_empty_input_does_not_crash(self):
+        assert metrics.accuracy([], []) == 0.0
+        assert metrics.mse([], []) == 0.0

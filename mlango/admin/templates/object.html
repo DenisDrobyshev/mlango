@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}{{ opts.label }} — {{ site_title }}{% endblock %}
+
+{% block content %}
+<h1>{{ opts.verbose_name_plural.title() }}</h1>
+<p class="subtitle">
+  <span class="tag">{{ opts.kind }}</span>
+  <code>{{ opts.label }}</code>
+  {% if opts.description %}— {{ opts.description }}{% endif %}
+</p>
+
+<div class="card">
+  <h2>Declaration</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Detail</th></tr></thead>
+    <tbody>
+      {% for f in schema.fields %}
+      <tr>
+        <td class="mono">{{ f.name }}{% if f.target %} <span class="tag ok">target</span>{% endif %}</td>
+        <td>{{ f['class'] }}</td>
+        <td>{{ 'yes' if f.required else 'no' }}</td>
+        <td class="mono">
+          {%- for k, v in f.items() if k not in ('name','class','kind','required','null','target') -%}
+            {{ k }}={{ v | short(40) }}{% if not loop.last %}, {% endif %}
+          {%- endfor -%}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">No fields declared.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{% if summary %}
+<div class="card">
+  <h2>Configuration</h2>
+  <dl class="kv">
+    {% for k, v in summary.items() %}
+      <dt>{{ k }}</dt><dd class="mono">{{ v | short(300) }}</dd>
+    {% endfor %}
+  </dl>
+</div>
+{% endif %}
+
+{% if opts.kind == 'dataset' %}
+<div class="card">
+  <h2>Data preview</h2>
+  <form class="filters" method="get">
+    {% if entry.get_search_fields() %}
+      <label class="field">Search
+        <input type="search" name="q" value="{{ search }}" placeholder="{{ entry.get_search_fields() | join(', ') }}">
+      </label>
+    {% endif %}
+    {% for name, values in filter_values.items() %}
+      <label class="field">{{ name }}
+        <select name="f_{{ name }}">
+          <option value="">all</option>
+          {% for v in values %}
+            <option value="{{ v }}" {% if filters[name] == (v | string) %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% endfor %}
+    <button type="submit">Apply</button>
+  </form>
+
+  {% if preview_error %}
+    <p class="empty">Could not read the source: {{ preview_error }}</p>
+  {% elif rows %}
+    <div class="scroll">
+    <table>
+      <thead><tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>{% for c in columns %}<td>{{ entry.render(row, c) }}</td>{% endfor %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div class="pager">
+      {% if page_no > 1 %}<a href="?page={{ page_no - 1 }}&q={{ search }}">← previous</a>{% endif %}
+      <span class="empty">page {{ page_no }}</span>
+      {% if has_next %}<a href="?page={{ page_no + 1 }}&q={{ search }}">next →</a>{% endif %}
+    </div>
+  {% else %}
+    <p class="empty">No rows matched.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Materialised versions</h2>
+  {% if versions %}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Version</th><th>Rows</th><th>Schema</th><th>Content</th><th>Notes</th><th>Created</th></tr></thead>
+    <tbody>
+      {% for v in versions %}
+      <tr>
+        <td class="num">v{{ v.version }}</td>
+        <td class="num">{{ v.row_count | number }}</td>
+        <td class="mono">{{ v.fingerprint }}</td>
+        <td class="mono">{{ (v.content_hash or '')[:12] }}</td>
+        <td>{{ v.notes | short(60) }}</td>
+        <td>{{ v.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">Not materialised yet.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if opts.kind == 'model' %}
+<div class="card">
+  <h2>Registered versions</h2>
+  {% if versions %}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Version</th><th>Stage</th><th>Metrics</th><th>Params</th><th>Created</th></tr></thead>
+    <tbody>
+      {% for v in versions %}
+      <tr>
+        <td class="num">v{{ v.version }}</td>
+        <td><span class="tag {{ v.stage }}">{{ v.stage }}</span></td>
+        <td class="mono">{% for k, val in (v.metrics or {}).items() %}{{ k }}={{ val | number }} {% endfor %}</td>
+        <td class="mono">{{ v.params | short(80) }}</td>
+        <td>{{ v.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">Not trained yet.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if opts.kind in ('model', 'eval') %}
+<div class="card">
+  <h2>Runs</h2>
+  {% if runs %}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Run</th><th>Status</th><th>Summary</th><th>Started</th><th>Duration</th></tr></thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td><a class="mono" href="{{ admin_url }}/runs/{{ run.uuid }}">{{ run.short_id }}</a></td>
+        <td><span class="tag {{ run.status }}">{{ run.status }}</span></td>
+        <td class="mono">{% for k, val in (run.summary or {}).items() %}{{ k }}={{ val | number }} {% endfor %}</td>
+        <td>{{ run.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="num">{{ run.duration_s | duration }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">No runs yet.</p>{% endif %}
+</div>
+{% endif %}
+
+{% if opts.kind == 'agent' %}
+<div class="card">
+  <h2>Recent traces</h2>
+  {% if traces %}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Trace</th><th>Input</th><th>Output</th><th>Steps</th><th>Tokens</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for t in traces %}
+      <tr>
+        <td><a class="mono" href="{{ admin_url }}/traces/{{ t.uuid }}">{{ t.short_id }}</a></td>
+        <td>{{ t.input | short(50) }}</td>
+        <td>{{ t.output | short(50) }}</td>
+        <td class="num">{{ t.steps }}</td>
+        <td class="num">{{ t.total_tokens | number }}</td>
+        <td><span class="tag {{ t.status }}">{{ t.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">This agent has not run yet.</p>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

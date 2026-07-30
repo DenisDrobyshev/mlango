@@ -1,0 +1,125 @@
+site_name: mlango
+site_description: A batteries-included framework for machine learning, analytics and LLM agents.
+site_url: https://denisdrobyshev.github.io/mlango/
+repo_url: https://github.com/DenisDrobyshev/mlango
+repo_name: DenisDrobyshev/mlango
+edit_uri: edit/master/docs/
+copyright: MIT licensed. Not affiliated with the Django Software Foundation.
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - search.suggest
+    - search.highlight
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  # One file per translation: docs/index.md is English, docs/index.ru.md is
+  # Russian. Pages without a translation fall back to English, so adding a
+  # language never leaves a broken navigation tree.
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          name: English
+          default: true
+          build: true
+        - locale: ru
+          name: Русский
+          build: true
+          site_name: mlango
+          site_description: >-
+            Фреймворк для машинного обучения, аналитики и LLM-агентов
+            с батарейками в комплекте.
+          nav_translations:
+            Getting started: Начало работы
+            Introduction: Введение
+            Tutorial: Учебник
+            Concepts: Концепции
+            Building blocks: Строительные блоки
+            Datasets: Датасеты
+            Models: Модели
+            Agents: Агенты
+            Evaluations: Оценка
+            Operating a project: Эксплуатация проекта
+            Admin: Админка
+            Serving: Развёртывание
+            Settings: Настройки
+            Command line: Командная строка
+            Migrations: Миграции
+            Community: Сообщество
+            Contributing: Как участвовать
+            Translating: Перевод
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+
+nav:
+  - Getting started:
+      - Introduction: index.md
+      - Tutorial: tutorial.md
+      - Concepts: concepts.md
+  - Building blocks:
+      - Datasets: datasets.md
+      - Models: models.md
+      - Agents: agents.md
+      - Evaluations: evals.md
+  - Operating a project:
+      - Admin: admin.md
+      - Serving: serving.md
+      - Migrations: migrations.md
+      - Command line: cli.md
+      - Settings: settings.md
+  - Community:
+      - Contributing: contributing.md
+      - Translating: translating.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/DenisDrobyshev/mlango

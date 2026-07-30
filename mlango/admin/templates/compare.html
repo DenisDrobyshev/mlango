@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Compare runs — {{ site_title }}{% endblock %}
+
+{% block content %}
+<h1>Compare runs</h1>
+<p class="subtitle">Line up parameters and metrics side by side to see what actually changed.</p>
+
+<div class="card">
+  <form class="filters" method="get">
+    <label class="field" style="flex:1 1 340px">Run ids (comma separated)
+      <input type="text" name="ids" value="{{ ids }}" placeholder="7c8f1020, c089b7e6">
+    </label>
+    <button type="submit">Compare</button>
+  </form>
+
+  {% if runs %}
+  <div class="scroll">
+  <table>
+    <thead>
+      <tr>
+        <th></th>
+        {% for run in runs %}
+          <th><a class="mono" href="{{ admin_url }}/runs/{{ run.uuid }}">{{ run.short_id }}</a></th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr><th>target</th>{% for run in runs %}<td>{{ run.target }}</td>{% endfor %}</tr>
+      <tr><th>status</th>{% for run in runs %}<td><span class="tag {{ run.status }}">{{ run.status }}</span></td>{% endfor %}</tr>
+      <tr><th>duration</th>{% for run in runs %}<td class="num">{{ run.duration_s | duration }}</td>{% endfor %}</tr>
+      {% for key in param_keys %}
+      <tr>
+        <th class="mono">{{ key }}</th>
+        {% for run in runs %}<td class="mono">{{ (run.params or {}).get(key, '—') | short(40) }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+      {% for key in metric_keys %}
+      <tr>
+        <th class="mono">{{ key }}</th>
+        {% for run in runs %}<td class="num">{{ (run.summary or {}).get(key) | number }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% elif ids %}
+    <p class="empty">None of those run ids matched.</p>
+  {% else %}
+    <p class="empty">Paste two or more run ids to compare them.</p>
+  {% endif %}
+</div>
+{% endblock %}

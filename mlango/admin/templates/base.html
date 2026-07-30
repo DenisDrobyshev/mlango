@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ site_title }}{% endblock %}</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --ink: #16181d;
+  --muted: #6b7280;
+  --line: #e3e6ea;
+  --accent: #2f6f4f;
+  --accent-soft: #e7f2ec;
+  --warn: #b45309;
+  --bad: #b4232c;
+  --good: #2f6f4f;
+  --radius: 10px;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101214;
+    --panel: #181b1f;
+    --ink: #e8eaed;
+    --muted: #9aa2ad;
+    --line: #2a2f36;
+    --accent: #6fcf97;
+    --accent-soft: #1c2b23;
+    --warn: #e0a458;
+    --bad: #e57373;
+    --good: #6fcf97;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+
+header.top {
+  background: var(--accent);
+  color: #fff;
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+header.top a { color: #fff; }
+header.top .brand { font-weight: 650; font-size: 1.05rem; letter-spacing: 0.01em; }
+header.top .ver { opacity: 0.75; font-size: 0.78rem; }
+header.top nav { margin-left: auto; display: flex; gap: 1rem; font-size: 0.9rem; }
+
+.layout { display: flex; align-items: flex-start; gap: 1.25rem; padding: 1.25rem; max-width: 1500px; margin: 0 auto; }
+aside {
+  flex: 0 0 232px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.9rem;
+  position: sticky;
+  top: 1.25rem;
+}
+aside h3 { margin: 0.85rem 0 0.35rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
+aside h3:first-child { margin-top: 0; }
+aside ul { list-style: none; margin: 0 0 0.4rem; padding: 0; }
+aside li a { display: block; padding: 0.18rem 0.4rem; border-radius: 6px; font-size: 0.9rem; }
+aside li a:hover { background: var(--accent-soft); text-decoration: none; }
+main { flex: 1 1 auto; min-width: 0; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem 1.25rem; margin-bottom: 1.1rem; }
+.card h2 { margin: 0 0 0.75rem; font-size: 1.02rem; }
+.card h2 .count { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
+
+h1 { font-size: 1.4rem; margin: 0 0 0.3rem; }
+.subtitle { color: var(--muted); margin: 0 0 1.1rem; font-size: 0.92rem; }
+
+.grid { display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.9rem 1rem; }
+.stat .n { font-size: 1.7rem; font-weight: 620; line-height: 1.1; }
+.stat .k { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.07em; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.scroll { overflow-x: auto; }
+th, td { text-align: left; padding: 0.48rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; white-space: nowrap; }
+tbody tr:hover { background: var(--accent-soft); }
+td.num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+
+.tag { display: inline-block; padding: 0.08rem 0.45rem; border-radius: 999px; font-size: 0.72rem; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.tag.ok, .tag.finished, .tag.production { color: var(--good); border-color: var(--good); }
+.tag.failed, .tag.bad { color: var(--bad); border-color: var(--bad); }
+.tag.running, .tag.staging { color: var(--warn); border-color: var(--warn); }
+
+form.filters { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.9rem; }
+label.field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+input, select, button {
+  font: inherit; padding: 0.34rem 0.5rem; border-radius: 7px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+}
+button { cursor: pointer; border-color: var(--accent); color: var(--accent); font-size: 0.86rem; }
+button:hover { background: var(--accent-soft); }
+
+.chart { width: 100%; height: auto; max-width: 460px; }
+.chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.chart-area { fill: var(--accent); opacity: 0.12; stroke: none; }
+.charts { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.charts figcaption { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; margin: 0; font-size: 0.9rem; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; word-break: break-word; }
+
+pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 0.7rem; overflow-x: auto; font-size: 0.82rem; margin: 0.4rem 0 0; }
+
+.span-row { display: grid; grid-template-columns: 150px 1fr 90px; gap: 0.6rem; align-items: center; padding: 0.3rem 0; border-bottom: 1px solid var(--line); font-size: 0.86rem; }
+.bar { height: 9px; background: var(--accent); border-radius: 999px; opacity: 0.65; }
+.bar.tool { background: var(--warn); }
+.bar.error { background: var(--bad); }
+
+.empty { color: var(--muted); font-style: italic; padding: 0.5rem 0; }
+.pager { display: flex; gap: 0.7rem; margin-top: 0.8rem; font-size: 0.88rem; }
+footer { text-align: center; color: var(--muted); font-size: 0.78rem; padding: 1.5rem 0 2.5rem; }
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="brand"><a href="{{ admin_url }}/">{{ site_header }}</a></span>
+  <span class="ver">v{{ version }}</span>
+  <nav>
+    <a href="{{ admin_url }}/runs">Runs</a>
+    <a href="{{ admin_url }}/traces">Traces</a>
+    <a href="{{ admin_url }}/versions">Versions</a>
+    <a href="/api/docs">API docs</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside>
+    {% for app in app_list %}
+      <h3>{{ app.name }}</h3>
+      {% for group in app.kinds %}
+        <ul>
+          {% for entry in group.objects %}
+            <li><a href="{{ admin_url }}/o/{{ entry.label }}">{{ entry.opts.verbose_name_plural }}</a></li>
+          {% endfor %}
+        </ul>
+      {% endfor %}
+    {% else %}
+      <h3>No apps</h3>
+      <p class="empty">Add an app to <code>INSTALLED_APPS</code>.</p>
+    {% endfor %}
+  </aside>
+
+  <main>
+    {% block content %}{% endblock %}
+    <footer>mlango {{ version }} — a Django-shaped framework for ML and agents</footer>
+  </main>
+</div>
+</body>
+</html>

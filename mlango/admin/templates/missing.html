@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Not found — {{ site_title }}{% endblock %}
+
+{% block content %}
+<h1>Not found</h1>
+<p class="subtitle">There is no {{ what }} in this project's metastore.</p>
+<div class="card">
+  <p>It may have been recorded against a different <code>METASTORE</code>, or deleted.</p>
+  <p><a href="{{ admin_url }}/">← back to the overview</a></p>
+</div>
+{% endblock %}

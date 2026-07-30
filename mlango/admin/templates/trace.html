@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Trace {{ trace.short_id }} — {{ site_title }}{% endblock %}
+
+{% block content %}
+<h1>Trace <span class="mono">{{ trace.short_id }}</span></h1>
+<p class="subtitle">
+  <span class="tag {{ trace.status }}">{{ trace.status }}</span>
+  <a href="{{ admin_url }}/o/{{ trace.agent }}">{{ trace.agent }}</a>
+  · {{ trace.steps }} step{{ '' if trace.steps == 1 else 's' }}
+  · {{ trace.total_tokens | number }} tokens
+  · {{ trace.duration_s | duration }}
+</p>
+
+<div class="card">
+  <h2>Conversation</h2>
+  <dl class="kv">
+    <dt>Input</dt><dd>{{ trace.input }}</dd>
+    <dt>Output</dt><dd>{{ trace.output or '—' }}</dd>
+    {% if trace.session_id %}<dt>Session</dt><dd class="mono">{{ trace.session_id }}</dd>{% endif %}
+    <dt>Started</dt><dd>{{ trace.started_at }}</dd>
+    {% if trace.meta %}<dt>Meta</dt><dd class="mono">{{ trace.meta }}</dd>{% endif %}
+  </dl>
+  {% if trace.error %}<pre>{{ trace.error }}</pre>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Steps <span class="count">· {{ spans | length }}</span></h2>
+  {% if spans %}
+    {% for item in spans %}
+      <div class="span-row">
+        <div>
+          <span class="tag">{{ item.span.kind }}</span>
+          <span class="mono">{{ item.span.name | short(24) }}</span>
+        </div>
+        <div><div class="bar {{ item.span.kind }}{% if item.span.error %} error{% endif %}" style="width: {{ item.width }}%"></div></div>
+        <div class="num">{{ item.span.duration_s | duration }}</div>
+      </div>
+      <details style="margin: 0.2rem 0 0.6rem 0.2rem">
+        <summary style="cursor:pointer; color:var(--muted); font-size:0.82rem">input / output</summary>
+        <pre>in:  {{ item.span.input }}
+out: {{ item.span.output }}
+{%- if item.span.usage %}
+use: {{ item.span.usage }}
+{%- endif %}
+{%- if item.span.error %}
+err: {{ item.span.error }}
+{%- endif %}</pre>
+      </details>
+    {% endfor %}
+  {% else %}<p class="empty">No spans recorded — tracing may be disabled.</p>{% endif %}
+</div>
+{% endblock %}

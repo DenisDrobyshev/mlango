@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Traces — {{ site_title }}{% endblock %}
+
+{% block content %}
+<h1>Agent traces</h1>
+<p class="subtitle">Every agent invocation, with the steps it took to get there.</p>
+
+<div class="card">
+  <form class="filters" method="get">
+    <label class="field">Agent
+      <select name="agent">
+        <option value="">all</option>
+        {% for a in agents %}<option value="{{ a }}" {% if selected_agent == a %}selected{% endif %}>{{ a }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit">Filter</button>
+  </form>
+
+  {% if traces %}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Trace</th><th>Agent</th><th>Session</th><th>Input</th><th>Output</th><th>Steps</th><th>Tokens</th><th>Status</th><th>Duration</th></tr></thead>
+    <tbody>
+      {% for t in traces %}
+      <tr>
+        <td><a class="mono" href="{{ admin_url }}/traces/{{ t.uuid }}">{{ t.short_id }}</a></td>
+        <td>{{ t.agent }}</td>
+        <td class="mono">{{ t.session_id | short(14) or '—' }}</td>
+        <td>{{ t.input | short(45) }}</td>
+        <td>{{ t.output | short(45) }}</td>
+        <td class="num">{{ t.steps }}</td>
+        <td class="num">{{ t.total_tokens | number }}</td>
+        <td><span class="tag {{ t.status }}">{{ t.status }}</span></td>
+        <td class="num">{{ t.duration_s | duration }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">No traces yet.</p>{% endif %}
+</div>
+{% endblock %}

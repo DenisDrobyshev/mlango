@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Runs — {{ site_title }}{% endblock %}
+
+{% block content %}
+<h1>Runs</h1>
+<p class="subtitle">Every training, evaluation and agent execution, newest first.</p>
+
+<div class="card">
+  <form class="filters" method="get">
+    <label class="field">Kind
+      <select name="kind">
+        <option value="">all</option>
+        {% for k in kinds %}<option value="{{ k }}" {% if selected.kind == k %}selected{% endif %}>{{ k }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field">Status
+      <select name="status">
+        <option value="">all</option>
+        {% for s in statuses %}<option value="{{ s }}" {% if selected.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field">Target
+      <input type="text" name="target" value="{{ selected.target }}" placeholder="app.Object">
+    </label>
+    <button type="submit">Filter</button>
+  </form>
+
+  {% if runs %}
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Run</th><th>Name</th><th>Kind</th><th>Target</th><th>Status</th><th>Summary</th><th>Started</th><th>Duration</th></tr></thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td><a class="mono" href="{{ admin_url }}/runs/{{ run.uuid }}">{{ run.short_id }}</a></td>
+        <td>{{ run.name | short(28) }}</td>
+        <td>{{ run.kind }}</td>
+        <td><a href="{{ admin_url }}/o/{{ run.target }}">{{ run.target }}</a></td>
+        <td><span class="tag {{ run.status }}">{{ run.status }}</span></td>
+        <td class="mono">{% for k, val in (run.summary or {}).items() %}{{ k }}={{ val | number }} {% endfor %}</td>
+        <td>{{ run.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="num">{{ run.duration_s | duration }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="subtitle" style="margin-top:0.8rem">
+    Compare runs by id: <code>{{ admin_url }}/compare?ids=abc123,def456</code>
+  </p>
+  {% else %}<p class="empty">No runs match these filters.</p>{% endif %}
+</div>
+{% endblock %}

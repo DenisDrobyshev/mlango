@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.short_id }} — {{ site_title }}{% endblock %}
+
+{% block content %}
+<h1>Run <span class="mono">{{ run.short_id }}</span></h1>
+<p class="subtitle">
+  <span class="tag {{ run.status }}">{{ run.status }}</span>
+  {{ run.kind }} · <a href="{{ admin_url }}/o/{{ run.target }}">{{ run.target }}</a>
+  {% if run.name %}· {{ run.name }}{% endif %}
+</p>
+
+<div class="card">
+  <h2>Environment</h2>
+  <dl class="kv">
+    <dt>Started</dt><dd>{{ run.started_at }}</dd>
+    <dt>Duration</dt><dd>{{ run.duration_s | duration }}</dd>
+    <dt>Seed</dt><dd class="mono">{{ run.seed if run.seed is not none else '—' }}</dd>
+    <dt>Device</dt><dd class="mono">{{ run.device or '—' }}</dd>
+    <dt>Host</dt><dd class="mono">{{ run.host or '—' }}</dd>
+    <dt>Python</dt><dd class="mono">{{ run.python_version or '—' }}</dd>
+    <dt>Git commit</dt><dd class="mono">{{ (run.git_commit or '—')[:12] }}{% if run.git_dirty %} <span class="tag bad">dirty</span>{% endif %}</dd>
+    {% if run.tags %}<dt>Tags</dt><dd>{% for t in run.tags %}<span class="tag">{{ t }}</span> {% endfor %}</dd>{% endif %}
+    {% if run.notes %}<dt>Notes</dt><dd>{{ run.notes }}</dd>{% endif %}
+  </dl>
+</div>
+
+{% if run.error %}
+<div class="card">
+  <h2>Error</h2>
+  <pre>{{ run.error }}</pre>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Parameters</h2>
+  {% if run.params %}
+  <dl class="kv">
+    {% for k, v in run.params.items() %}<dt class="mono">{{ k }}</dt><dd class="mono">{{ v | short(200) }}</dd>{% endfor %}
+  </dl>
+  {% else %}<p class="empty">No parameters recorded.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Metrics</h2>
+  {% if scalars %}
+  <dl class="kv">
+    {% for k, v in scalars.items() %}<dt class="mono">{{ k }}</dt><dd class="mono">{{ v | number }}</dd>{% endfor %}
+  </dl>
+  {% else %}<p class="empty">No metrics recorded.</p>{% endif %}
+
+  {% if charts %}
+  <div class="charts" style="margin-top:1rem">
+    {% for c in charts %}
+      <figure style="margin:0">
+        {{ c.svg | safe }}
+        <figcaption>{{ c.key }} — {{ c.points | length }} points</figcaption>
+      </figure>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% if artifacts %}
+<div class="card">
+  <h2>Artifacts</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Name</th><th>Kind</th><th>Size</th><th>SHA-256</th><th>Path</th></tr></thead>
+    <tbody>
+      {% for a in artifacts %}
+      <tr>
+        <td>{{ a.name }}</td>
+        <td>{{ a.kind }}</td>
+        <td class="num">{{ a.size_bytes | number }}</td>
+        <td class="mono">{{ (a.sha256 or '')[:12] }}</td>
+        <td class="mono">{{ a.path | short(60) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+{% if eval_results %}
+<div class="card">
+  <h2>Evaluation cases <span class="count">· {{ eval_results | length }}</span></h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Case</th><th>Passed</th><th>Scores</th><th>Output</th><th>Expected</th><th>Trace</th></tr></thead>
+    <tbody>
+      {% for r in eval_results %}
+      <tr>
+        <td class="mono">{{ r.case_id }}</td>
+        <td><span class="tag {{ 'ok' if r.passed else 'bad' }}">{{ 'pass' if r.passed else 'fail' }}</span></td>
+        <td class="mono">{% for k, v in (r.scores or {}).items() %}{{ k }}={{ v | number }} {% endfor %}</td>
+        <td>{{ r.output | short(60) }}</td>
+        <td>{{ r.expected | short(40) }}</td>
+        <td>{% if r.trace_uuid %}<a class="mono" href="{{ admin_url }}/traces/{{ r.trace_uuid }}">{{ r.trace_uuid[:8] }}</a>{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
