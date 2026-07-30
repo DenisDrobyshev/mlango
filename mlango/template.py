@@ -371,6 +371,97 @@ class SentimentAccuracy(Eval):
         threshold = 1.0
 '''
 
+TESTS_INIT_PY = ""
+
+DEMO_TESTS_PY = '''"""Tests for the demo app.
+
+``python manage.py test`` runs these against a throwaway metastore and artifact
+store, so a test run can never touch the data or the runs you care about — the
+same guarantee Django gives you with a test database.
+
+These four are the patterns worth copying: query a dataset, train a model,
+score an eval, and talk to an agent.
+"""
+
+import pytest
+
+from demo.agents import Helper
+from demo.datasets import Reviews
+from demo.evals import SentimentAccuracy
+from demo.models import Sentiment
+
+
+def test_the_dataset_loads_and_is_labelled():
+    assert Reviews.objects.count() > 0
+    assert set(Reviews.objects.values_list("label", flat=True)) == {"neg", "pos"}
+
+
+def test_lookups_narrow_the_queryset():
+    positive = Reviews.objects.filter(label="pos")
+    assert 0 < positive.count() < Reviews.objects.count()
+    assert all(record.label == "pos" for record in positive.take(5))
+
+
+def test_splits_do_not_overlap():
+    parts = Reviews.objects.split(train=0.8, test=0.2)
+    train_ids = set(parts["train"].values_list("id", flat=True))
+    test_ids = set(parts["test"].values_list("id", flat=True))
+    assert train_ids and test_ids
+    assert train_ids & test_ids == set()
+
+
+@pytest.fixture(scope="module")
+def trained():
+    """Train once and reuse it — training is the slow part."""
+    model = Sentiment()
+    model.train()
+    return model
+
+
+def test_training_records_a_run(trained):
+    from mlango.training import recent_runs
+
+    run = recent_runs(limit=1, kind="train")[0]
+    assert run.status == "finished"
+    assert run.summary.get("accuracy", 0) > 0.5
+
+
+def test_the_model_predicts_a_declared_class(trained):
+    assert trained.predict("an absolute delight, loved it") in {"neg", "pos"}
+
+
+def test_a_saved_model_can_be_loaded_back(trained):
+    assert Sentiment.load().predict("dreadful, a waste of time") in {"neg", "pos"}
+
+
+def test_the_eval_passes_its_threshold(trained):
+    report = SentimentAccuracy.evaluate()
+    assert report.passed, report.summary()
+
+
+def test_the_agent_answers():
+    result = Helper().run("hello")
+    assert result.output
+    assert result.error == ""
+'''
+
+APP_TESTS_PY = '''"""Tests for the __APP__ app.
+
+``python manage.py test`` runs these against a throwaway metastore and artifact
+store, so nothing here can touch your real runs.
+"""
+
+
+def test_placeholder():
+    """Replace me: query a dataset, train a model, or score an eval.
+
+        from __APP__.datasets import MyDataset
+
+        def test_the_dataset_loads():
+            assert MyDataset.objects.count() > 0
+    """
+'''
+
 DEMO_ADMIN_PY = '''"""Admin customisation for the demo app.
 
 Everything declared shows up in the admin without being registered. Register
@@ -543,6 +634,8 @@ def render_project(name: str, target: str, *, demo: bool = True) -> list[str]:
                 "demo/evals.py": DEMO_EVALS_PY,
                 "demo/admin.py": DEMO_ADMIN_PY,
                 "demo/migrations/__init__.py": "",
+                "tests/__init__.py": TESTS_INIT_PY,
+                "tests/test_demo.py": DEMO_TESTS_PY,
             }
         )
     else:
@@ -557,6 +650,10 @@ def render_project(name: str, target: str, *, demo: bool = True) -> list[str]:
             '    "demo",\n', "    # Add your apps here.\n"
         )
         tree["README.md"] = PROJECT_README.replace("python manage.py train demo.Sentiment\n", "")
+        # Even an empty project gets somewhere for `manage.py test` to look, so
+        # the command works before anything else has been declared.
+        tree["tests/__init__.py"] = TESTS_INIT_PY
+        tree["tests/test_project.py"] = _substitute(APP_TESTS_PY, **{APP: name})
 
     created = []
     for relative, content in tree.items():
@@ -579,6 +676,7 @@ def render_app(name: str, target: str) -> list[str]:
         "evals.py": APP_EVALS_PY,
         "admin.py": APP_ADMIN_PY,
         "migrations/__init__.py": "",
+        "tests.py": APP_TESTS_PY,
     }
 
     created = []

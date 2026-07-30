@@ -47,7 +47,7 @@ class Command(BaseCommand):
         if options["empty"]:
             if not app_labels:
                 raise CommandError("--empty needs an app label: makemigrations myapp --empty")
-            changes = {app_labels[0]: []}
+            changes: dict[str, list[Any]] = {app_labels[0]: []}
         else:
             changes = MigrationAutodetector(from_state, to_state).changes(app_labels)
 

@@ -46,6 +46,34 @@ class Command(BaseCommand):
         from mlango.metastore.session import dispose_all
         from mlango.storage import reset_default_storage
 
+        # Everything that can fail happens before settings are redirected, so no
+        # error path can leave BASE_DIR pointing at a sandbox that is about to be
+        # deleted. In-process callers (a notebook, another command) would keep
+        # that broken value for the rest of the session.
+        #
+        # The default resolves against the project root rather than the shell's
+        # working directory: running manage.py from elsewhere should not collect
+        # whatever `tests` happens to sit next to you.
+        project_tests = os.path.join(str(settings.BASE_DIR), "tests")
+        targets = options["target"] or ([project_tests] if os.path.isdir(project_tests) else [])
+        if not targets:
+            raise CommandError(
+                f"No tests found. Create {project_tests}, or name a path: "
+                f"manage.py test myapp/tests.py"
+            )
+
+        argv = [*targets]
+        if options.get("keyword"):
+            argv += ["-k", options["keyword"]]
+        if options["exitfirst"]:
+            argv.append("-x")
+        if options["coverage"]:
+            argv += ["--cov", "--cov-report=term-missing"]
+        if self.verbosity >= 2:
+            argv.append("-v")
+        elif self.verbosity == 0:
+            argv.append("-q")
+
         # Django creates a test database so a test run cannot touch real data.
         # The same idea, applied to the metastore and the artifact store.
         sandbox = tempfile.mkdtemp(prefix="mlango-test-")
@@ -60,25 +88,6 @@ class Command(BaseCommand):
         settings.METASTORE = {**settings.METASTORE, "URL": "sqlite:///test-metastore.db"}
         settings.STORAGE = {**settings.STORAGE, "ROOT": "artifacts"}
         settings.BASE_DIR = sandbox
-
-        targets = options["target"] or (["tests"] if os.path.isdir("tests") else [])
-        if not targets:
-            raise CommandError(
-                "No tests found. Create a ./tests directory, or name a path: "
-                "manage.py test myapp/tests.py"
-            )
-
-        argv = [*targets]
-        if options.get("keyword"):
-            argv += ["-k", options["keyword"]]
-        if options["exitfirst"]:
-            argv.append("-x")
-        if options["coverage"]:
-            argv += ["--cov", "--cov-report=term-missing"]
-        if self.verbosity >= 2:
-            argv.append("-v")
-        elif self.verbosity == 0:
-            argv.append("-q")
 
         self.write(self.style.dim(f"metastore: sqlite in {sandbox}"))
         self.write("")

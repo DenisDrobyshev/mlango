@@ -23,9 +23,40 @@ SQLite in a temporary directory. **No API key is needed to contribute.**
 ```bash
 ruff check mlango tests
 ruff format mlango tests
-pytest -q
+mypy mlango
+pytest -q --cov
 mkdocs build --strict     # if you touched docs
 ```
+
+All five are blocking in CI. `pytest --cov` enforces the same coverage floor
+locally that it does on the server — the threshold lives in `pyproject.toml`, so
+there is no way to be green on a laptop and red on CI.
+
+## The pipeline
+
+`.github/workflows/ci.yml` (mirrored in `.gitlab-ci.yml`) runs:
+
+| Job | What it protects |
+|---|---|
+| `lint` | ruff, ruff format, **mypy with no errors allowed** |
+| `test` | the suite on Python 3.10–3.13, plus macOS and Windows |
+| `coverage` | the floor in `[tool.coverage.report] fail_under` |
+| `audit` | `pip-audit` against what actually gets installed |
+| `quickstart` | `startproject` → migrate → train → evaluate → serve, for real |
+| `transformers` | fine-tunes a tiny checkpoint, so that backend is exercised |
+| `build` | wheel installs into a clean venv and ships `py.typed` |
+| `docs` | `mkdocs build --strict` |
+| `ci` | one aggregate check that fails if any job above did |
+
+`CodeQL` runs separately, on pushes and weekly.
+
+Require the aggregate **`CI`** check in branch protection rather than the
+individual jobs. Requiring them one by one means a job added later is not
+required, and a red job silently stops blocking merges.
+
+Two rules for the coverage floor: raise it when the number rises, and never
+lower it to turn a red build green. If a change genuinely cannot be covered,
+say why in the pull request.
 
 ## What we look for
 

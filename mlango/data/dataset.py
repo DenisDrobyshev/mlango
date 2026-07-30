@@ -24,6 +24,7 @@ from typing import Any
 from mlango.core.base import Declarative
 from mlango.core.exceptions import ImproperlyConfigured
 from mlango.core.hashing import canonical_json
+from mlango.core.typing import DatasetClass
 from mlango.data.query import DataQuerySet, Record
 from mlango.data.sources import InMemorySource, PythonSource, Source
 
@@ -67,7 +68,7 @@ _QUERYSET_METHODS = (
 class Manager:
     """``Dataset.objects`` — hands out fresh QuerySets."""
 
-    def __init__(self, dataset: type):
+    def __init__(self, dataset: DatasetClass):
         self.dataset = dataset
 
     def get_queryset(self) -> DataQuerySet:
@@ -192,13 +193,22 @@ class Dataset(Declarative):
 
         with session_scope() as session:
             if not force:
-                existing = session.execute(
-                    select(DatasetVersion).where(
-                        DatasetVersion.label == opts.label,
-                        DatasetVersion.content_hash == content_hash,
-                        DatasetVersion.fingerprint == schema_fingerprint,
+                # first(), not scalar_one_or_none(): force=True deliberately
+                # creates duplicates, so several rows can share a content hash.
+                # Return the earliest — the original snapshot of this content.
+                existing = (
+                    session.execute(
+                        select(DatasetVersion)
+                        .where(
+                            DatasetVersion.label == opts.label,
+                            DatasetVersion.content_hash == content_hash,
+                            DatasetVersion.fingerprint == schema_fingerprint,
+                        )
+                        .order_by(DatasetVersion.version)
                     )
-                ).scalar_one_or_none()
+                    .scalars()
+                    .first()
+                )
                 if existing is not None:
                     storage.delete(staging_name)
                     return existing

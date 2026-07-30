@@ -118,6 +118,14 @@ class BaseCommand:
                 raise
             self.stderr(self.style.error(f"{type(exc).__name__}: {exc}"))
             return 1
+        except LookupError as exc:
+            # Registry lookups raise LookupError, and their messages already
+            # list the alternatives. Showing a traceback for a mistyped label
+            # buries the one line that helps.
+            if traceback:
+                raise
+            self.stderr(self.style.error(f"error: {exc}"))
+            return 1
         except KeyboardInterrupt:
             self.stderr(self.style.warn("\ninterrupted"))
             return 130
@@ -144,7 +152,10 @@ class BaseCommand:
 
         if settings_module:
             os.environ[ENVIRONMENT_VARIABLE] = settings_module
-        if not os.environ.get(ENVIRONMENT_VARIABLE):
+        # settings.configure() is the third documented way in, and command
+        # discovery already accepts it; requiring the environment variable here
+        # too would leave notebooks and tests unable to run commands at all.
+        if not os.environ.get(ENVIRONMENT_VARIABLE) and not settings.configured:
             raise CommandError(
                 f"Settings are not configured. Run this through manage.py, or set "
                 f"{ENVIRONMENT_VARIABLE}, or pass --settings=myproject.settings."

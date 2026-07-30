@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from mlango.core.exceptions import FieldError
+from mlango.core.typing import DeclarativeClass
 
 
 class ObjectAdmin:
@@ -35,7 +36,7 @@ class ObjectAdmin:
     #: Free text shown at the top of the object's page.
     help_text: str = ""
 
-    def __init__(self, target: type, site: Any):
+    def __init__(self, target: DeclarativeClass, site: Any):
         self.target = target
         self.site = site
 

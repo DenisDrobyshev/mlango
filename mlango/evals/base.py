@@ -24,6 +24,7 @@ from typing import Any
 from mlango.core.base import Declarative
 from mlango.core.exceptions import ImproperlyConfigured
 from mlango.core.serialization import jsonable as _jsonable
+from mlango.core.typing import DatasetClass
 from mlango.evals.scorers import Scorer
 from mlango.metastore.models import RunKind
 from mlango.training.run import RunContext
@@ -111,7 +112,7 @@ class Eval(Declarative):
     # -- configuration -------------------------------------------------------
 
     @classmethod
-    def get_dataset(cls) -> type:
+    def get_dataset(cls) -> DatasetClass:
         dataset = cls._meta.extras.get("dataset")
         if dataset is None:
             raise ImproperlyConfigured(
@@ -171,18 +172,17 @@ class Eval(Declarative):
         The default understands agents and models; override for anything else
         — a pipeline, an HTTP endpoint, a human-in-the-loop stub.
         """
-        target = self.get_target()
+        runnable = _resolve_target(self.get_target())
         value = case.get(self.input_field())
 
-        if hasattr(target, "run") and hasattr(target, "get_tools"):
-            return target().run(value) if isinstance(target, type) else target.run(value)
-        if hasattr(target, "predict"):
-            instance = target.load() if isinstance(target, type) else target
-            return instance.predict(value)
-        if callable(target):
-            return target(value)
+        if hasattr(runnable, "run") and hasattr(runnable, "get_tools"):
+            return runnable.run(value)
+        if hasattr(runnable, "predict"):
+            return runnable.predict(value)
+        if callable(runnable):
+            return runnable(value)
         raise ImproperlyConfigured(
-            f"{self._meta.label}: don't know how to run {target!r}. Override predict()."
+            f"{self._meta.label}: don't know how to run {runnable!r}. Override predict()."
         )
 
     def score(self, case: Any, output: Any) -> dict[str, Any] | float | bool:
@@ -328,6 +328,25 @@ class Eval(Declarative):
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
+
+
+def _resolve_target(target: Any) -> Any:
+    """Turn a declared class into something ready to be called once per case.
+
+    ``Meta.target`` is normally a class, and the two families need different
+    treatment: an agent is cheap to construct, while a model has to come back
+    from its registered version — otherwise the eval would score an untrained
+    object and report a number that means nothing. Anything already
+    instantiated, or a plain callable, is passed straight through.
+    """
+    if not isinstance(target, type):
+        return target
+    declared: Any = target
+    if hasattr(declared, "get_tools"):
+        return declared()
+    if hasattr(declared, "load"):
+        return declared.load()
+    return declared
 
 
 def _as_text(output: Any) -> str:

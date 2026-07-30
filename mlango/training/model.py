@@ -25,6 +25,7 @@ from typing import Any
 from mlango.core.base import Declarative
 from mlango.core.exceptions import ImproperlyConfigured, RunError
 from mlango.core.signals import model_registered, post_predict, pre_predict
+from mlango.core.typing import DatasetClass
 from mlango.metastore.models import RunKind, Stage
 from mlango.training import metrics as metric_lib
 from mlango.training.callbacks import Callback, CallbackList, build_callbacks
@@ -88,7 +89,7 @@ class Model(Declarative):
         return get_trainer(str(name))
 
     @classmethod
-    def get_dataset(cls) -> type:
+    def get_dataset(cls) -> DatasetClass:
         dataset = cls._meta.extras.get("dataset")
         if dataset is None:
             raise ImproperlyConfigured(
@@ -106,7 +107,7 @@ class Model(Declarative):
         return str(cls._meta.extras.get("task", "classification"))
 
     @classmethod
-    def get_target(cls, dataset: type | None = None) -> str:
+    def get_target(cls, dataset: DatasetClass | None = None) -> str:
         target = cls._meta.extras.get("target")
         if target:
             return str(target)
@@ -120,7 +121,7 @@ class Model(Declarative):
         return targets[0].name or ""
 
     @classmethod
-    def get_features(cls, dataset: type | None = None) -> list[str]:
+    def get_features(cls, dataset: DatasetClass | None = None) -> list[str]:
         """Which dataset fields this model consumes.
 
         ``Meta.features`` is explicit and wins. Otherwise every non-target field
@@ -175,7 +176,7 @@ class Model(Declarative):
     def train(
         self,
         *,
-        dataset: type | None = None,
+        dataset: DatasetClass | None = None,
         queryset: Any = None,
         splits: dict[str, float] | None = None,
         callbacks: list[Callback] | None = None,
@@ -196,7 +197,7 @@ class Model(Declarative):
         from mlango.conf import settings
 
         opts = type(self)._meta
-        dataset_class = dataset or (
+        dataset_class: DatasetClass = dataset or (
             queryset.dataset if queryset is not None else self.get_dataset()
         )
         trainer = self.get_trainer()
@@ -496,13 +497,13 @@ class Model(Declarative):
     def summary(cls) -> dict[str, Any]:
         extras = cls._meta.extras
         dataset = extras.get("dataset")
+        dataset_meta = getattr(dataset, "_meta", None)
         return {
             "label": cls._meta.label,
             "task": cls.get_task(),
             "trainer": extras.get("trainer"),
-            "dataset": getattr(dataset, "_meta", None).label
-            if hasattr(dataset, "_meta")
-            else dataset,
+            # Meta.dataset may still be the string form, or absent entirely.
+            "dataset": dataset_meta.label if dataset_meta is not None else dataset,
             "hyperparameters": {f.name: f.get_default() for f in cls._meta.fields},
             "tunable": [f.name for f in cls._meta.tunable_fields],
         }

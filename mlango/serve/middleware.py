@@ -127,8 +127,13 @@ class GuardrailMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-def build_middleware() -> list[type]:
-    """Resolve ``settings.SERVE_MIDDLEWARE`` into classes, outermost first."""
+def build_middleware() -> list[Any]:
+    """Resolve ``settings.SERVE_MIDDLEWARE`` into classes, outermost first.
+
+    Typed loosely on purpose: the stack is dotted paths in settings, so what
+    comes back is whatever the project named. ``check`` is what reports a class
+    that is not usable as middleware, with the setting's name attached.
+    """
     from mlango.conf import settings
     from mlango.core.module_loading import import_string
 

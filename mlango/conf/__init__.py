@@ -138,7 +138,7 @@ class LazySettings:
     def __repr__(self) -> str:
         if self._wrapped is _empty:
             return "<LazySettings [unconfigured]>"
-        return f"<LazySettings {self._wrapped.SETTINGS_MODULE!r}>"
+        return f"<LazySettings {getattr(self._wrapped, 'SETTINGS_MODULE', None)!r}>"
 
 
 settings = LazySettings()

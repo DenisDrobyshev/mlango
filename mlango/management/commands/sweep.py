@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from mlango.core.typing import ModelClass
 from mlango.management.base import BaseCommand, CommandError
 
 
@@ -105,7 +106,7 @@ class Command(BaseCommand):
             self.ok(f"Promoted the winning version to {options['promote_best']}.")
 
 
-def _parse_space(model_class: type, entries: list[str]) -> dict[str, list[Any]]:
+def _parse_space(model_class: ModelClass, entries: list[str]) -> dict[str, list[Any]]:
     """Turn ``name=v1,v2`` strings into a cleaned search space."""
     space: dict[str, list[Any]] = {}
     for entry in entries:

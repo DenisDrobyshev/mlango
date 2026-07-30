@@ -18,6 +18,7 @@ from typing import Any
 
 from mlango.core.exceptions import FieldError, ValidationError
 from mlango.core.hashing import fingerprint, full_digest
+from mlango.core.typing import DatasetClass
 
 
 class Record(dict):
@@ -97,7 +98,10 @@ class DataQuerySet:
     """An immutable, lazily-evaluated view over a dataset."""
 
     def __init__(
-        self, dataset: type, source: Any = None, pipeline: list[dict[str, Any]] | None = None
+        self,
+        dataset: DatasetClass,
+        source: Any = None,
+        pipeline: list[dict[str, Any]] | None = None,
     ):
         self.dataset = dataset
         self._source = source
@@ -377,7 +381,7 @@ class DataQuerySet:
                     f"{opts.label} declares {len(targets)} target fields; pass target= to pick one."
                 )
             target = targets[0].name or ""
-        input_names = list(features) if features else [f.name for f in opts.input_fields]
+        input_names = list(features) if features else [f.name or "" for f in opts.input_fields]
         xs: list[Any] = []
         ys: list[Any] = []
         for record in self:
@@ -550,7 +554,13 @@ def _order_by(stream: Iterable[Record], names: list[str]) -> Iterator[Record]:
     for name in reversed(names):
         reverse = name.startswith("-")
         key = name[1:] if reverse else name
-        buffered.sort(key=lambda r, k=key: (r.get(k) is None, r.get(k)), reverse=reverse)
+
+        # None sorts first within a direction rather than raising on comparison.
+        def sort_key(record: Record, field: str = key) -> tuple[bool, Any]:
+            value = record.get(field)
+            return (value is None, value)
+
+        buffered.sort(key=sort_key, reverse=reverse)
     yield from buffered
 
 

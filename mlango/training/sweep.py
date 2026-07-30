@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from mlango.core.exceptions import ImproperlyConfigured, RunError
+from mlango.core.typing import ModelClass
 from mlango.metastore.models import RunKind, RunStatus
 from mlango.training.run import RunContext
 
@@ -109,7 +110,7 @@ def sample_space(
 
 
 def run_sweep(
-    model_class: type,
+    model_class: ModelClass,
     space: dict[str, list[Any]],
     *,
     strategy: str = GRID,
@@ -242,7 +243,7 @@ def run_sweep(
     return result
 
 
-def _promote(model_class: type, trial: Trial, stage: str) -> None:
+def _promote(model_class: ModelClass, trial: Trial, stage: str) -> None:
     """Promote the version registered by the winning trial."""
     from sqlalchemy import select
 

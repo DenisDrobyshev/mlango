@@ -155,12 +155,26 @@ disable_error_code = ["attr-defined"]
 
 [tool.coverage.run]
 source = ["mlango"]
-omit = ["mlango/template.py", "*/__main__.py"]
+omit = ["*/__main__.py"]
+# The CLI is tested by running manage.py in a subprocess, which is the only way
+# to cover settings discovery, argv parsing and exit codes as a user hits them.
+# Without parallel mode those subprocesses are invisible to coverage, and the
+# management commands look untested when they are not.
+parallel = true
+concurrency = ["thread", "multiprocessing"]
 
 [tool.coverage.report]
+# A gate, not a target. Set just under the current figure so an unrelated change
+# cannot quietly delete coverage, while a one-line platform difference does not
+# fail an honest build. Raise it when the number rises; never lower it to make a
+# red build green.
+fail_under = 84
+show_missing = true
+skip_covered = false
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
+    "@overload",
 ]

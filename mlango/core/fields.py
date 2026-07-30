@@ -17,7 +17,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mlango.core.exceptions import FieldError, ValidationError
 
@@ -84,6 +84,15 @@ class Field:
     def __set_name__(self, owner: type, name: str) -> None:
         self.name = name
         self.owner = owner
+
+    if TYPE_CHECKING:
+        # A declared field is replaced by a FieldDescriptor when the metaclass
+        # builds the class, so `self.C` inside build() is the *value*, not the
+        # Field. A checker cannot see that substitution, and without this it
+        # reports an error on every line of ordinary user code that reads a
+        # hyperparameter. Type-checking only — never present at runtime, so the
+        # real descriptor installed by the metaclass is untouched.
+        def __get__(self, instance: Any, owner: type | None = None) -> Any: ...
 
     @property
     def verbose_name(self) -> str:

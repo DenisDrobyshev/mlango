@@ -14,6 +14,13 @@ from typing import Any
 
 from mlango.core.apps import AppConfig
 from mlango.core.exceptions import AppRegistryNotReady, ImproperlyConfigured
+from mlango.core.typing import (
+    AgentClass,
+    DatasetClass,
+    DeclarativeClass,
+    EvalClass,
+    ModelClass,
+)
 
 #: The four families of declarative object, in the order the admin shows them.
 KINDS = ("dataset", "model", "agent", "eval")
@@ -22,8 +29,8 @@ KINDS = ("dataset", "model", "agent", "eval")
 class Registry:
     def __init__(self) -> None:
         self.app_configs: dict[str, AppConfig] = {}
-        self._objects: dict[str, dict[str, type]] = defaultdict(dict)
-        self._pending: list[tuple[str, type]] = []
+        self._objects: dict[str, dict[str, DeclarativeClass]] = defaultdict(dict)
+        self._pending: list[tuple[str, DeclarativeClass]] = []
         self.ready = False
         self.loading = False
         self._lock = threading.RLock()
@@ -90,8 +97,8 @@ class Registry:
 
     # -- registration --------------------------------------------------------
 
-    def register(self, kind: str, cls: type) -> None:
-        label = cls._meta.label  # type: ignore[attr-defined]
+    def register(self, kind: str, cls: DeclarativeClass) -> None:
+        label = cls._meta.label
         if not self.ready and not self.loading:
             # Declared before setup() ran (a test module, a script). Hold it and
             # attach it once apps are known, so nothing is silently lost.
@@ -104,7 +111,7 @@ class Registry:
             )
         self._objects[kind][label] = cls
 
-    def unregister(self, kind: str, target: type | str) -> bool:
+    def unregister(self, kind: str, target: DeclarativeClass | str) -> bool:
         """Remove a registration.
 
         Labels are unique on purpose — two datasets called ``Reviews`` in one
@@ -122,7 +129,7 @@ class Registry:
 
     def _flush_pending(self) -> None:
         for kind, cls in self._pending:
-            self._objects[kind][cls._meta.label] = cls  # type: ignore[attr-defined]
+            self._objects[kind][cls._meta.label] = cls
         self._pending.clear()
 
     # -- lookups -------------------------------------------------------------
@@ -147,15 +154,15 @@ class Registry:
                     best = config
         return best
 
-    def get_registered(self, kind: str | None = None) -> list[type]:
+    def get_registered(self, kind: str | None = None) -> list[DeclarativeClass]:
         if kind is None:
-            out: list[type] = []
+            out: list[DeclarativeClass] = []
             for k in KINDS:
                 out.extend(self._objects.get(k, {}).values())
             return out
         return list(self._objects.get(kind, {}).values())
 
-    def get(self, kind: str, label: str) -> type:
+    def get(self, kind: str, label: str) -> Any:
         """Look up by ``"app.Object"`` or, when unambiguous, by ``"Object"``."""
         registry = self._objects.get(kind, {})
         if label in registry:
@@ -169,24 +176,27 @@ class Registry:
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
-            names = ", ".join(sorted(c._meta.label for c in matches))  # type: ignore[attr-defined]
+            names = ", ".join(sorted(c._meta.label for c in matches))
             raise LookupError(f"{label!r} is ambiguous; it matches {names}.")
         known = ", ".join(sorted(registry)) or "(none)"
         raise LookupError(f"No {kind} named {label!r}. Registered {kind}s: {known}.")
 
-    def get_dataset(self, label: str) -> type:
+    # The per-kind getters return the concrete family, so callers get
+    # Dataset.objects and Model.load() without a cast at every call site.
+
+    def get_dataset(self, label: str) -> DatasetClass:
         return self.get("dataset", label)
 
-    def get_model(self, label: str) -> type:
+    def get_model(self, label: str) -> ModelClass:
         return self.get("model", label)
 
-    def get_agent(self, label: str) -> type:
+    def get_agent(self, label: str) -> AgentClass:
         return self.get("agent", label)
 
-    def get_eval(self, label: str) -> type:
+    def get_eval(self, label: str) -> EvalClass:
         return self.get("eval", label)
 
-    def find(self, label: str) -> tuple[str, type]:
+    def find(self, label: str) -> tuple[str, Any]:
         """Look a label up across every kind — used by the CLI and admin."""
         for kind in KINDS:
             try:

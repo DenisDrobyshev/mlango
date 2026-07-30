@@ -21,7 +21,9 @@ lint:
     - pip install -e ".[dev]"
     - ruff check mlango tests
     - ruff format --check mlango tests
-    - mypy mlango || true
+    # Blocking, as on GitHub: users type-check their own code against these
+    # annotations, so the annotations have to be true.
+    - mypy mlango
 
 test:
   stage: test
@@ -31,14 +33,31 @@ test:
   image: python:$PYTHON_VERSION
   script:
     - pip install -e ".[sklearn,dev]"
-    - pytest -q --cov=mlango --cov-report=term-missing --cov-report=xml
+    # No coverage gate across the matrix; the `coverage` job is the gate.
+    - pytest -q
+
+coverage:
+  stage: test
+  script:
+    - pip install -e ".[sklearn,dev]"
+    # fail_under lives in pyproject.toml, so the same threshold applies here,
+    # on GitHub, and on a laptop.
+    - pytest -q --cov --cov-report=term-missing --cov-report=xml
   coverage: '/^TOTAL.+?(\d+\%)$/'
   artifacts:
     when: always
+    expire_in: 2 weeks
     reports:
       coverage_report:
         coverage_format: cobertura
         path: coverage.xml
+
+audit:
+  stage: test
+  script:
+    - pip install -e ".[sklearn,dev]" pip-audit
+    # Audits what is installed, which is what a user gets.
+    - pip-audit --strict --desc
 
 quickstart:
   stage: verify
@@ -58,6 +77,10 @@ quickstart:
     - python manage.py agent demo.Helper 'hello there'
     - python manage.py runs list
     - python manage.py traces list
+    - python manage.py dataset head demo.Reviews -n 3
+    - python manage.py dataset materialize demo.Reviews
+    # The scaffold ships tests; a new project should be green before it is edited.
+    - python manage.py test
     - python manage.py runserver 8099 &
     - |
       for _ in $(seq 1 30); do
@@ -69,7 +92,14 @@ quickstart:
       curl -sf -X POST http://127.0.0.1:8099/api/predict/ \
         -H 'Content-Type: application/json' \
         -d '{"input": "great movie, loved every minute"}'
+    - |
+      curl -sf -X POST http://127.0.0.1:8099/api/chat/ \
+        -H 'Content-Type: application/json' \
+        -d '{"message": "hello"}'
+    # A stream route must not take the schema down with it.
+    - curl -sf http://127.0.0.1:8099/api/openapi.json > /dev/null
     - test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8099/admin/)" = "200"
+    - test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8099/admin/o/nope.Nope)" = "404"
 
 build:
   stage: verify
@@ -80,8 +110,11 @@ build:
     - python -m venv /tmp/fresh
     - /tmp/fresh/bin/pip install dist/*.whl
     - /tmp/fresh/bin/mlango --version
+    # py.typed has to ship, or the annotations are invisible downstream.
+    - /tmp/fresh/bin/python -c "import importlib.resources as r, mlango; assert (r.files(mlango) / 'py.typed').is_file()"
   artifacts:
     paths: [dist/]
+    expire_in: 2 weeks
 
 docs:
   stage: verify
@@ -90,3 +123,4 @@ docs:
     - mkdocs build --strict
   artifacts:
     paths: [site/]
+    expire_in: 2 weeks

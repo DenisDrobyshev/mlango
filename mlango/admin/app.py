@@ -47,12 +47,15 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
     templates.env.filters["duration"] = _duration
     templates.env.filters["number"] = _number
 
-    def page(request: Request, template: str, **context: Any) -> HTMLResponse:
+    def page(
+        request: Request, template: str, *, status_code: int = 200, **context: Any
+    ) -> HTMLResponse:
         import mlango
 
         return templates.TemplateResponse(
             request=request,
             name=template,
+            status_code=status_code,
             context={
                 "site_header": settings.ADMIN_SITE_HEADER,
                 "site_title": settings.ADMIN_SITE_TITLE,
@@ -62,6 +65,14 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
                 **context,
             },
         )
+
+    def missing(request: Request, what: str) -> HTMLResponse:
+        """A styled 404.
+
+        The status code matters as much as the page: a bookmark to a deleted run
+        should not read as success to a browser, a crawler or an uptime check.
+        """
+        return page(request, "missing.html", status_code=404, what=what)
 
     # -- dashboard -----------------------------------------------------------
 
@@ -90,7 +101,13 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
         q: str = Query(default=""),
         page_no: int = Query(default=1, alias="page", ge=1),
     ) -> HTMLResponse:
-        entry = site.get(label)
+        try:
+            entry = site.get(label)
+        except LookupError:
+            # A mistyped URL is a 404, not a 500: the sidebar on the page lists
+            # every label, which is exactly what someone who mistyped one needs.
+            return missing(request, f"object {label!r}")
+
         filters = {
             name: request.query_params.get(f"f_{name}", "") for name in entry.get_list_filter()
         }
@@ -152,7 +169,7 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
 
         run = get_run(reference)
         if run is None:
-            return page(request, "missing.html", what=f"run {reference!r}")
+            return missing(request, f"run {reference!r}")
 
         charts = []
         for key in metric_keys(run.id):
@@ -206,7 +223,7 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
 
         trace = get_trace(reference)
         if trace is None:
-            return page(request, "missing.html", what=f"trace {reference!r}")
+            return missing(request, f"trace {reference!r}")
         total = trace.duration_s or 0.0
         spans = [
             {
@@ -232,7 +249,7 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
         )
 
     @app.post("/versions/{version_id}/promote")
-    def promote(version_id: int, stage: str = Form(...)) -> RedirectResponse:
+    def promote(request: Request, version_id: int, stage: str = Form(...)) -> RedirectResponse:
         from mlango.core.registry import apps
         from mlango.metastore.models import ModelVersion
         from mlango.metastore.session import session_scope
@@ -241,9 +258,13 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
             row = session.get(ModelVersion, version_id)
             label, number = (row.label, row.version) if row else (None, None)
 
-        if label is not None:
+        if label is not None and number is not None:
             apps.get_model(label).promote(number, stage)
-        return RedirectResponse(f"{settings.ADMIN_URL.rstrip('/')}/versions", status_code=303)
+
+        # url_for, not settings.ADMIN_URL: this app may be mounted anywhere (or
+        # nowhere, under a test client), and the redirect has to land on the page
+        # this very app serves rather than on a path only the default mount has.
+        return RedirectResponse(str(request.url_for("versions")), status_code=303)
 
     return app
 

@@ -7,13 +7,16 @@ derived from the same declaration that trains the model.
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from typing import Any
 
 from pydantic import BaseModel, Field
+from starlette.responses import StreamingResponse
 
 from mlango.core.exceptions import RunError
+from mlango.core.typing import AgentClass, ModelClass
 from mlango.serve.routing import Endpoint
 
 logger = logging.getLogger("mlango.serve")
@@ -52,7 +55,7 @@ class ChatResponse(BaseModel):
 class _LazyModel:
     """Loads a registered model version once, on first request."""
 
-    def __init__(self, model_class: type, version: int | None, stage: str | None):
+    def __init__(self, model_class: ModelClass, version: int | None, stage: str | None):
         self.model_class = model_class
         self.version = version
         self.stage = stage
@@ -75,7 +78,7 @@ class _LazyModel:
 
 
 def model_endpoint(
-    model_class: type, *, version: int | None = None, stage: str | None = None
+    model_class: ModelClass, *, version: int | None = None, stage: str | None = None
 ) -> Endpoint:
     """Build a prediction endpoint for a declared model."""
     loader = _LazyModel(model_class, version, stage)
@@ -113,7 +116,7 @@ def model_endpoint(
     )
 
 
-def agent_endpoint(agent_class: type, **agent_kwargs: Any) -> Endpoint:
+def agent_endpoint(agent_class: AgentClass, **agent_kwargs: Any) -> Endpoint:
     """Build a chat endpoint for a declared agent."""
     label = agent_class._meta.label
 
@@ -146,17 +149,19 @@ def agent_endpoint(agent_class: type, **agent_kwargs: Any) -> Endpoint:
     )
 
 
-def agent_stream_endpoint(agent_class: type, **agent_kwargs: Any) -> Endpoint:
+def agent_stream_endpoint(agent_class: AgentClass, **agent_kwargs: Any) -> Endpoint:
     """Build a Server-Sent Events endpoint for a declared agent.
 
     A multi-step agent can take a minute, and a blank screen for a minute reads
     as broken. This streams each step as it happens, in the ``text/event-stream``
     format every browser understands natively through ``EventSource``.
+
+    ``StreamingResponse`` is imported at module scope on purpose: ``from
+    __future__ import annotations`` turns the handler's return annotation into a
+    string, and FastAPI has to resolve it to build the schema. A function-local
+    import leaves it unresolvable and breaks ``/api/openapi.json`` for the whole
+    project, not just this route.
     """
-    import json
-
-    from starlette.responses import StreamingResponse
-
     label = agent_class._meta.label
 
     def handler(payload: ChatRequest) -> StreamingResponse:

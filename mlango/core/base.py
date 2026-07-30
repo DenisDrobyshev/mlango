@@ -17,11 +17,14 @@ themselves in a config file.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mlango.core.exceptions import ValidationError
 from mlango.core.fields import NOT_PROVIDED, Field
 from mlango.core.options import Options
+
+if TYPE_CHECKING:
+    from mlango.core.typing import DeclarativeClass
 
 
 class FieldDescriptor:
@@ -80,8 +83,9 @@ class DeclarativeMeta(type):
 
         cls = super().__new__(mcls, name, bases, body, **kwargs)
 
-        kind = body.get("_kind") or next(
-            (b._kind for b in cls.__mro__[1:] if getattr(b, "_kind", None)), "object"
+        kind: str = str(
+            body.get("_kind")
+            or next((b._kind for b in cls.__mro__[1:] if getattr(b, "_kind", None)), "object")
         )
         allowed = tuple(
             dict.fromkeys(
@@ -139,7 +143,9 @@ class DeclarativeMeta(type):
         if not opts.abstract:
             from mlango.core.registry import apps
 
-            apps.register(kind, cls)
+            # cls is a Declarative by construction; the metaclass cannot say so
+            # in its own signature, since it is what makes that true.
+            apps.register(kind, cast("DeclarativeClass", cls))
 
         return cls
 

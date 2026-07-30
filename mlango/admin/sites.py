@@ -12,6 +12,7 @@ from typing import Any
 
 from mlango.admin.options import DEFAULTS, ObjectAdmin
 from mlango.core.exceptions import ImproperlyConfigured
+from mlango.core.typing import DeclarativeClass
 
 
 class AdminSite:
@@ -23,7 +24,9 @@ class AdminSite:
     # -- registration --------------------------------------------------------
 
     def register(
-        self, target: type | None = None, admin_class: type[ObjectAdmin] | None = None
+        self,
+        target: DeclarativeClass | None = None,
+        admin_class: type[ObjectAdmin] | None = None,
     ) -> Any:
         """Register an object, optionally with custom options.
 
@@ -44,7 +47,9 @@ class AdminSite:
         self._attach(target, admin_class, explicit=True)
         return admin_class
 
-    def _attach(self, target: type, admin_class: type[ObjectAdmin], *, explicit: bool) -> None:
+    def _attach(
+        self, target: DeclarativeClass, admin_class: type[ObjectAdmin], *, explicit: bool
+    ) -> None:
         meta = getattr(target, "_meta", None)
         if meta is None:
             raise ImproperlyConfigured(f"{target!r} is not an mlango declarative class.")
@@ -55,7 +60,7 @@ class AdminSite:
         if explicit:
             self._explicit.add(label)
 
-    def unregister(self, target: type) -> None:
+    def unregister(self, target: DeclarativeClass) -> None:
         label = target._meta.label
         self._registry.pop(label, None)
         self._explicit.discard(label)
@@ -128,7 +133,7 @@ class AdminSite:
 site = AdminSite()
 
 
-def register(target: type, admin_class: type[ObjectAdmin] | None = None) -> Any:
+def register(target: DeclarativeClass, admin_class: type[ObjectAdmin] | None = None) -> Any:
     """Module-level shortcut for ``site.register``."""
     return site.register(target, admin_class)
 

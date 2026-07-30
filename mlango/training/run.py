@@ -234,15 +234,16 @@ class RunContext:
     def __enter__(self) -> RunContext:
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(self, exc_type, exc, tb) -> None:
+        # Returning None (never True) so the exception keeps propagating: the run
+        # is recorded as failed, but the caller still sees what went wrong.
         if exc is not None:
             if isinstance(exc, KeyboardInterrupt):
                 self.finish(RunStatus.KILLED, error="Interrupted by user.")
             else:
                 self.fail(exc)
-            return False
+            return
         self.finish()
-        return False
 
     # -- reading back --------------------------------------------------------
 
@@ -278,12 +279,29 @@ def recent_runs(
 
 
 def get_run(reference: str) -> Run | None:
-    """Look a run up by uuid prefix, name or numeric id."""
+    """Look a run up by uuid prefix, name or numeric id.
+
+    The returned object outlives its session, so its collections are loaded up
+    front: ``get_run(x).artifacts`` in a shell or a template has to return a list
+    rather than a DetachedInstanceError.
+    """
     from sqlalchemy import or_, select
+    from sqlalchemy.orm import selectinload
+
+    eager = (
+        selectinload(Run.artifacts),
+        selectinload(Run.metrics),
+        selectinload(Run.model_versions),
+        selectinload(Run.eval_results),
+    )
 
     with session_scope() as session:
         if reference.isdigit():
-            found = session.get(Run, int(reference))
+            found = (
+                session.execute(select(Run).where(Run.id == int(reference)).options(*eager))
+                .scalars()
+                .first()
+            )
             if found is not None:
                 return found
         return (
@@ -291,6 +309,7 @@ def get_run(reference: str) -> Run | None:
                 select(Run)
                 .where(or_(Run.uuid.startswith(reference), Run.name == reference))
                 .order_by(Run.started_at.desc())
+                .options(*eager)
             )
             .scalars()
             .first()

@@ -23,10 +23,20 @@ SQLite in a temporary directory. No API key is needed to contribute.
 ```bash
 ruff check mlango tests           # lint
 ruff format mlango tests          # format
-mypy mlango                       # types (advisory, not blocking)
-pytest -q                         # tests
+mypy mlango                       # types — blocking, must be clean
+pytest -q --cov                   # tests, with the coverage floor enforced
 mkdocs build --strict             # docs, if you touched them
 ```
+
+Every one of those is blocking in CI. Two of them deserve a word:
+
+- **mypy has to be clean.** Users type-check their own projects against these
+  annotations, so an annotation that lies is a bug we shipped. If something is
+  genuinely undecidable, use a narrow `# type: ignore[code]` with a comment
+  saying why — not a blanket exclusion.
+- **Coverage has a floor**, set in `[tool.coverage.report] fail_under` so
+  `pytest --cov` enforces the same number on your laptop as on the server.
+  Raise it when coverage rises; never lower it to make a red build green.
 
 CI additionally scaffolds a fresh project and runs it end to end. If you change
 the scaffold, the settings, or any command, run that path locally too:
@@ -36,8 +46,18 @@ mlango startproject /tmp/demoproject
 cd /tmp/demoproject
 python manage.py check && python manage.py migrate
 python manage.py train demo.Sentiment
+python manage.py test
 python manage.py runserver
 ```
+
+`startproject` ships a working `tests/` directory, so a brand-new project is
+green before anyone edits it. If you change the scaffold, keep it that way.
+
+### Maintainers: branch protection
+
+Require the single aggregate **`CI`** check, not the individual jobs. Requiring
+jobs one at a time means any job added later is not required, and a red job
+quietly stops blocking merges.
 
 ## What we look for
 

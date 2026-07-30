@@ -227,6 +227,25 @@ class TestMaterialize:
         second = reviews.materialize(reviews.objects.filter(label="pos"))
         assert first.id == second.id
 
+    def test_force_creates_a_duplicate_on_purpose(self, project, reviews):
+        first = reviews.materialize(reviews.objects.filter(label="pos"))
+        forced = reviews.materialize(reviews.objects.filter(label="pos"), force=True)
+        assert forced.id != first.id
+        assert forced.version == first.version + 1
+
+    def test_deduplication_survives_a_forced_duplicate(self, project, reviews):
+        """force=True must not poison later calls.
+
+        Two versions can legitimately share a content hash once force has been
+        used, so the dedup lookup has to tolerate several matches rather than
+        insisting on exactly one.
+        """
+        original = reviews.materialize(reviews.objects.filter(label="pos"))
+        reviews.materialize(reviews.objects.filter(label="pos"), force=True)
+
+        again = reviews.materialize(reviews.objects.filter(label="pos"))
+        assert again.id == original.id  # the earliest snapshot of this content
+
     def test_different_content_makes_a_new_version(self, project, reviews):
         reviews.materialize(reviews.objects.filter(label="pos"))
         second = reviews.materialize(reviews.objects.get_queryset())

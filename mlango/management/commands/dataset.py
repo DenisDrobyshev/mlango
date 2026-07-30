@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from mlango.core.typing import DatasetClass
 from mlango.management.base import BaseCommand, CommandError
 
 
@@ -54,7 +55,7 @@ class Command(BaseCommand):
             )
         self.table(["dataset", "fields", "source", "rows"], rows)
 
-    def _show(self, dataset: type, options: dict[str, Any]) -> None:
+    def _show(self, dataset: DatasetClass, options: dict[str, Any]) -> None:
         self.write(self.style.bold(dataset._meta.label))
         if dataset._meta.description:
             self.write(self.style.dim(f"  {dataset._meta.description}"))
@@ -78,7 +79,7 @@ class Command(BaseCommand):
         self.write("")
         self.write(json.dumps(dataset.summary(), indent=2, default=str))
 
-    def _head(self, dataset: type, options: dict[str, Any]) -> None:
+    def _head(self, dataset: DatasetClass, options: dict[str, Any]) -> None:
         rows = list(dataset.objects.take(options["rows"]))
         if not rows:
             self.write("(no rows)")
@@ -86,7 +87,7 @@ class Command(BaseCommand):
         columns = list(rows[0].keys())
         self.table(columns, [[str(row.get(c))[:40] for c in columns] for row in rows])
 
-    def _validate(self, dataset: type, options: dict[str, Any]) -> None:
+    def _validate(self, dataset: DatasetClass, options: dict[str, Any]) -> None:
         from mlango.core.exceptions import ValidationError
 
         checked = 0
@@ -101,13 +102,13 @@ class Command(BaseCommand):
             raise CommandError("The dataset does not match its declaration.") from exc
         self.ok(f"{checked} row(s) validated against {dataset._meta.label}.")
 
-    def _materialize(self, dataset: type, options: dict[str, Any]) -> None:
+    def _materialize(self, dataset: DatasetClass, options: dict[str, Any]) -> None:
         version = dataset.materialize(notes=options["notes"], force=options["force"])
         self.ok(f"{version.ref} - {version.row_count} row(s)")
         self.write(self.style.dim(f"  content {(version.content_hash or '')[:16]}"))
         self.write(self.style.dim(f"  path    {version.path}"))
 
-    def _versions(self, dataset: type, options: dict[str, Any]) -> None:
+    def _versions(self, dataset: DatasetClass, options: dict[str, Any]) -> None:
         self.table(
             ["version", "rows", "schema", "content", "notes", "created"],
             [

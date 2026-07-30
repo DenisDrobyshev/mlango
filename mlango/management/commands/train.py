@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from mlango.core.typing import ModelClass
 from mlango.management.base import BaseCommand, CommandError
 
 
@@ -83,7 +84,7 @@ class Command(BaseCommand):
             self.ok(f"Registered {model._version.ref}")
 
 
-def _parse_params(model_class: type, entries: list[str]) -> dict[str, Any]:
+def _parse_params(model_class: ModelClass, entries: list[str]) -> dict[str, Any]:
     """Turn ``name=value`` strings into cleaned hyperparameters."""
     out: dict[str, Any] = {}
     for entry in entries:

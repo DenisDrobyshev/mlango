@@ -18,20 +18,43 @@ from mlango.training import metrics as metric_lib
 from mlango.training.trainer import Trainer
 
 
-def _as_matrix(inputs: list[Any]) -> Any:
+def _as_matrix(inputs: list[Any], features: list[str] | None = None) -> Any:
     """Normalise records into something an estimator accepts.
 
-    A single declared input field is passed through untouched, so a text
-    pipeline still receives a list of strings. Several fields become a dense
-    2-D array in a stable column order.
+    This mirrors ``DataQuerySet.xy()`` exactly, and it has to: training feeds the
+    estimator through xy() while a served request arrives as a dict, so any
+    disagreement between the two shapes means the deployed model scores
+    different columns than the fitted one. One input field is passed through
+    untouched, so a text pipeline still receives a list of strings; several
+    become a dense 2-D array in the declared field order.
     """
     if not inputs:
         return []
     first = inputs[0]
-    if isinstance(first, dict):
-        columns = sorted(first)
-        return np.asarray([[record.get(column) for column in columns] for record in inputs])
-    return list(inputs)
+    if not isinstance(first, dict):
+        return list(inputs)
+
+    # Prefer the declared order over sorted(): sorting a request's own keys makes
+    # the column order depend on the payload, and a missing or extra key would
+    # silently shift every column.
+    columns = list(features) if features else sorted(first)
+    if len(columns) == 1:
+        return [record.get(columns[0]) for record in inputs]
+    return np.asarray([[record.get(column) for column in columns] for record in inputs])
+
+
+def _features_of(model) -> list[str] | None:
+    """The model's declared features, or None if the declaration cannot say.
+
+    Inference must not fail on introspection: a loaded model whose dataset is no
+    longer importable can still predict from the payload's own keys.
+    """
+    from mlango.core.exceptions import MlangoError
+
+    try:
+        return model.get_features()
+    except (MlangoError, AttributeError, LookupError):
+        return None
 
 
 class SklearnTrainer(Trainer):
@@ -68,7 +91,7 @@ class SklearnTrainer(Trainer):
         epoch_started.send(sender=type(model), run=run, epoch=0)
         callbacks.emit("on_epoch_begin", run, 0, model=model)
 
-        estimator.fit(_as_matrix(x_train), y_train)
+        estimator.fit(_as_matrix(x_train, features), y_train)
 
         epoch_metrics = self._epoch_metrics(model, estimator, train, validation, target, features)
         # Recording metrics is the framework's job, not a callback's: a user who
@@ -94,7 +117,7 @@ class SklearnTrainer(Trainer):
 
         x_train, y_train = train.xy(target=target or None, features=features)
         train_report = metric_lib.report_for_task(
-            task, y_train, estimator.predict(_as_matrix(x_train))
+            task, y_train, estimator.predict(_as_matrix(x_train, features))
         )
         out.update({f"train_{k}": v for k, v in metric_lib.flatten_report(train_report).items()})
 
@@ -102,7 +125,7 @@ class SklearnTrainer(Trainer):
             x_val, y_val = validation.xy(target=target or None, features=features)
             if x_val:
                 val_report = metric_lib.report_for_task(
-                    task, y_val, estimator.predict(_as_matrix(x_val))
+                    task, y_val, estimator.predict(_as_matrix(x_val, features))
                 )
                 flattened = metric_lib.flatten_report(val_report)
                 out.update({f"val_{k}": v for k, v in flattened.items()})
@@ -117,14 +140,14 @@ class SklearnTrainer(Trainer):
     # -- inference -----------------------------------------------------------
 
     def predict(self, model, fitted, inputs: list[Any]) -> list[Any]:
-        predictions = fitted.predict(_as_matrix(inputs))
+        predictions = fitted.predict(_as_matrix(inputs, _features_of(model)))
         return [_python(value) for value in predictions]
 
     def predict_proba(self, model, fitted, inputs: list[Any]):
         if not hasattr(fitted, "predict_proba"):
             return None
         classes = [_python(c) for c in getattr(fitted, "classes_", [])]
-        probabilities = fitted.predict_proba(_as_matrix(inputs))
+        probabilities = fitted.predict_proba(_as_matrix(inputs, _features_of(model)))
         return [
             dict(zip(classes, (float(p) for p in row), strict=True))
             if classes

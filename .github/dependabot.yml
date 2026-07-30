@@ -1,0 +1,36 @@
+version: 2
+
+updates:
+  # Actions are the highest-value thing to keep current: a stale third-party
+  # action is a supply-chain risk in every workflow that uses it.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "deps"
+    # One PR for the whole dev toolchain, separate PRs for runtime dependencies:
+    # a linter bump needs a glance, a SQLAlchemy or FastAPI bump needs reading.
+    groups:
+      dev-tooling:
+        patterns: ["ruff", "mypy", "pytest*", "pre-commit", "build", "twine"]
+        dependency-type: development
+    ignore:
+      # Heavy ML dependencies are optional extras with their own release
+      # cadence, pinned deliberately by whoever installs them.
+      - dependency-name: torch
+      - dependency-name: transformers
+      - dependency-name: scikit-learn
+    open-pull-requests-limit: 5

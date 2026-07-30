@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
+from mlango.core.typing import AgentClass
 from mlango.management.base import BaseCommand
 
 
@@ -83,7 +84,7 @@ class Command(BaseCommand):
 
     # -- live step output ----------------------------------------------------
 
-    def _wire_step_output(self, agent_class: type) -> None:
+    def _wire_step_output(self, agent_class: AgentClass) -> None:
         from mlango.core.signals import tool_called
 
         style = self.style
