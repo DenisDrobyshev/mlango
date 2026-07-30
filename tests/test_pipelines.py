@@ -1,0 +1,217 @@
+"""The two CI definitions have to agree with each other.
+
+``.gitlab-ci.yml`` says at the top that it mirrors ``.github/workflows/ci.yml``
+and that the two must be kept in step, because a contributor may only ever see
+one of them. A comment did not achieve that: the GitHub audit job was fixed and
+the GitLab one was left with the flags that had just been proven wrong, so the
+GitLab pipeline failed and took the docs deployment down with it.
+
+These tests are that instruction made enforceable. They check the handful of
+things that actually have to match, not the file layout — the two systems
+express jobs differently and always will.
+"""
+
+from __future__ import annotations
+
+import pathlib
+import re
+
+import pytest
+
+yaml = pytest.importorskip("yaml")
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+GITHUB = ROOT / ".github" / "workflows" / "ci.yml"
+GITLAB = ROOT / ".gitlab-ci.yml"
+
+
+def _load(path: pathlib.Path) -> dict:
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _github_commands() -> str:
+    """Every shell line in the GitHub workflow, as one blob."""
+    workflow = _load(GITHUB)
+    lines = []
+    for job in workflow["jobs"].values():
+        for step in job.get("steps", []):
+            if isinstance(step.get("run"), str):
+                lines.append(step["run"])
+    return "\n".join(lines)
+
+
+def _gitlab_commands() -> str:
+    """Every script line in the GitLab pipeline, as one blob."""
+    pipeline = _load(GITLAB)
+    lines = []
+    for job in pipeline.values():
+        if not isinstance(job, dict):
+            continue
+        for key in ("before_script", "script", "after_script"):
+            entries = job.get(key) or []
+            if isinstance(entries, str):
+                entries = [entries]
+            lines.extend(str(entry) for entry in entries)
+    return "\n".join(lines)
+
+
+@pytest.fixture(scope="module")
+def commands() -> tuple[str, str]:
+    return _github_commands(), _gitlab_commands()
+
+
+class TestBothFilesExist:
+    def test_they_parse(self):
+        assert _load(GITHUB)["jobs"]
+        assert _load(GITLAB)
+
+    def test_the_gitlab_file_says_it_is_a_mirror(self):
+        """The claim in the header is what these tests are enforcing."""
+        header = GITLAB.read_text(encoding="utf-8")[:400]
+        assert "ci.yml" in header
+
+
+class TestInvariants:
+    def test_mypy_is_blocking_in_both(self, commands):
+        """Advisory type checking is how 87 errors accumulated the first time."""
+        for blob in commands:
+            assert re.search(r"^\s*-?\s*mypy mlango\s*$", blob, re.MULTILINE), blob
+            assert "mypy mlango || true" not in blob
+            assert "mypy mlango || exit 0" not in blob
+
+    def test_ruff_runs_in_both(self, commands):
+        for blob in commands:
+            assert "ruff check mlango tests" in blob
+            assert "ruff format --check mlango tests" in blob
+
+    def test_the_audit_flags_match(self, commands):
+        """--strict cannot be combined with --skip-editable; neither may use it."""
+        for blob in commands:
+            assert "pip-audit --desc --skip-editable" in blob
+            assert "pip-audit --strict" not in blob
+
+    def test_the_docs_build_is_strict_in_both(self, commands):
+        for blob in commands:
+            assert "mkdocs build --strict" in blob
+
+    def test_the_coverage_gate_is_not_given_a_threshold_on_the_command_line(self, commands):
+        """fail_under lives in pyproject.toml so a laptop enforces the same number."""
+        for blob in commands:
+            assert "--cov-fail-under" not in blob
+
+    def test_py_typed_is_verified_in_both(self, commands):
+        for blob in commands:
+            assert "py.typed" in blob
+
+
+class TestQuickstart:
+    def test_both_run_the_scaffold_s_own_tests(self, commands):
+        for blob in commands:
+            assert "manage.py test" in blob
+
+    def test_both_install_dev_for_the_quickstart(self, commands):
+        """`manage.py test` needs pytest, so the sklearn extra alone is not enough."""
+        github, gitlab = commands
+        assert ".[sklearn,dev]" in github
+        assert ".[sklearn,dev]" in gitlab
+
+    def test_neither_installs_sklearn_without_dev_anywhere(self, commands):
+        for blob in commands:
+            bare = re.findall(r'"\.\[sklearn\]"', blob)
+            assert not bare, bare
+
+    def test_both_exercise_the_same_commands(self, commands):
+        for verb in (
+            "startproject",
+            "check",
+            "migrate",
+            "makemigrations",
+            "train",
+            "evaluate",
+            "sweep",
+            "agent",
+            "runs list",
+            "traces list",
+            "dataset head",
+            "dataset materialize",
+            "runserver",
+        ):
+            for blob in commands:
+                assert verb in blob, f"{verb} missing"
+
+
+class TestPythonMatrix:
+    def test_the_versions_match(self):
+        """A version tested on one host and not the other is a gap nobody sees."""
+        github = _load(GITHUB)
+        entries = github["jobs"]["test"]["strategy"]["matrix"]["include"]
+        on_github = {str(entry["python"]) for entry in entries}
+
+        gitlab = _load(GITLAB)
+        on_gitlab = set(gitlab["test"]["parallel"]["matrix"][0]["PYTHON_VERSION"])
+
+        assert on_github >= on_gitlab
+        # GitLab has no macOS or Windows runners here, so GitHub covers more.
+        # What must hold is that every interpreter GitLab claims is also on
+        # GitHub, and that both cover the range pyproject.toml promises.
+        assert on_gitlab == {"3.10", "3.11", "3.12", "3.13"}
+
+    def test_the_matrix_covers_what_the_package_claims_to_support(self):
+        import tomllib
+
+        metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        classifiers = metadata["project"]["classifiers"]
+        claimed = {
+            line.rsplit(" :: ", 1)[1]
+            for line in classifiers
+            if line.startswith("Programming Language :: Python :: 3.")
+        }
+
+        entries = _load(GITHUB)["jobs"]["test"]["strategy"]["matrix"]["include"]
+        tested = {str(entry["python"]) for entry in entries}
+        assert claimed <= tested, f"claimed but untested: {sorted(claimed - tested)}"
+
+
+class TestGitHubSpecific:
+    def test_the_aggregate_check_needs_every_other_job(self):
+        """Branch protection requires one check; it has to depend on all of them."""
+        jobs = _load(GITHUB)["jobs"]
+        aggregate = jobs["ci"]
+        others = {name for name in jobs if name != "ci"}
+        assert set(aggregate["needs"]) == others
+
+    def test_the_aggregate_check_fails_on_a_failed_job(self):
+        jobs = _load(GITHUB)["jobs"]
+        body = yaml.safe_dump(jobs["ci"])
+        assert "failure" in body
+        assert "cancelled" in body
+
+    def test_permissions_default_to_read_only(self):
+        assert _load(GITHUB)["permissions"] == {"contents": "read"}
+
+    def test_jobs_needing_the_repository_visibility_say_so(self):
+        """CodeQL and Pages cannot work on a private repository."""
+        codeql = _load(ROOT / ".github" / "workflows" / "codeql.yml")
+        assert "visibility == 'public'" in str(codeql["jobs"]["analyze"]["if"])
+
+        docs = _load(ROOT / ".github" / "workflows" / "docs.yml")
+        assert "visibility == 'public'" in str(docs["jobs"]["deploy"]["if"])
+
+
+class TestGitLabSpecific:
+    def test_pages_builds_into_the_directory_gitlab_serves(self):
+        """The job name and `public/` are fixed by GitLab, not by us."""
+        pipeline = _load(GITLAB)
+        pages = pipeline["pages"]
+
+        assert "--site-dir public" in "\n".join(pages["script"])
+        assert pages["artifacts"]["paths"] == ["public/"]
+
+    def test_pages_only_publishes_from_the_default_branch(self):
+        pages = _load(GITLAB)["pages"]
+        assert "CI_DEFAULT_BRANCH" in str(pages["rules"])
+
+    def test_the_strict_docs_build_still_runs_off_the_default_branch(self):
+        """Otherwise a broken link would only be caught after merging."""
+        docs = _load(GITLAB)["docs"]
+        assert "!=" in str(docs["rules"])

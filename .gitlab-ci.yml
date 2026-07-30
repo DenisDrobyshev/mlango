@@ -56,13 +56,17 @@ audit:
   stage: test
   script:
     - pip install -e ".[sklearn,dev]" pip-audit
-    # Audits what is installed, which is what a user gets.
-    - pip-audit --strict --desc
+    # Audits what is installed, which is what a user gets. --skip-editable
+    # leaves out mlango itself, which has no release to compare against, and
+    # --strict cannot be combined with it: strict fails on anything it could not
+    # audit, including the package skipped on purpose.
+    - pip-audit --desc --skip-editable
 
 quickstart:
   stage: verify
   script:
-    - pip install -e ".[sklearn]"
+    # `dev` too: the scaffold ships tests, and running them below needs pytest.
+    - pip install -e ".[sklearn,dev]"
     # The README promises four commands from nothing to a working admin.
     # This job is what keeps that promise honest.
     - mlango startproject demoproject

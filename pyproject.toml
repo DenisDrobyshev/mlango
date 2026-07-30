@@ -72,6 +72,9 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "pre-commit>=3.7",
+    # Only for tests/test_pipelines.py, which reads the two CI definitions and
+    # checks they still agree with each other.
+    "pyyaml>=6.0",
 ]
 docs = [
     "mkdocs-material>=9.5",
