@@ -34,9 +34,7 @@ class _Loader(yaml.SafeLoader):
     """
 
 
-_Loader.add_multi_constructor(
-    "tag:yaml.org,2002:python/name:", lambda loader, suffix, node: suffix
-)
+_Loader.add_multi_constructor("tag:yaml.org,2002:python/name:", lambda loader, suffix, node: suffix)
 
 
 def _load(path: pathlib.Path) -> dict:
@@ -302,7 +300,8 @@ class TestDocumentation:
     def test_the_navigation_labels_are_all_translated(self):
         config = _load(ROOT / "mkdocs.yml")
         russian = next(
-            locale for locale in config["plugins"][1]["i18n"]["languages"]
+            locale
+            for locale in config["plugins"][1]["i18n"]["languages"]
             if locale["locale"] == "ru"
         )
         translated = set(russian["nav_translations"])
