@@ -19,8 +19,15 @@ MIGRATION_RE = re.compile(r"^(\d{4})_([a-zA-Z0-9_]+)\.py$")
 
 
 class MigrationWriter:
-    def __init__(self, app_label: str, name: str, operations: list[ops.Operation],
-                 dependencies: list[tuple[str, str]], *, initial: bool = False):
+    def __init__(
+        self,
+        app_label: str,
+        name: str,
+        operations: list[ops.Operation],
+        dependencies: list[tuple[str, str]],
+        *,
+        initial: bool = False,
+    ):
         self.app_label = app_label
         self.name = name
         self.operations = operations
@@ -89,8 +96,7 @@ class MigrationWriter:
         name, args, kwargs = operation.deconstruct()
         if isinstance(operation, ops.RunPython):
             raise MigrationError(
-                "RunPython operations are written by hand; the autodetector never "
-                "generates them."
+                "RunPython operations are written by hand; the autodetector never generates them."
             )
         parts = [f"        migrations.{name}("]
         for value in args:

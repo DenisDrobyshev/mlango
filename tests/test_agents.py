@@ -7,7 +7,7 @@ from typing import Literal
 import pytest
 
 from mlango.agents import Agent, BufferMemory, NullMemory, WindowMemory, tool
-from mlango.agents.tools import Tool, ToolError, Toolbox
+from mlango.agents.tools import Tool, Toolbox, ToolError
 from mlango.core.exceptions import ValidationError
 
 
@@ -85,7 +85,11 @@ class TestToolSchema:
             return sum(items)
 
         schema = listy.to_schema()["input_schema"]["properties"]["items"]
-        assert schema == {"type": "array", "items": {"type": "integer"}, "description": "Numbers to add."}
+        assert schema == {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "Numbers to add.",
+        }
 
     def test_optional_annotation_unwraps(self):
         @tool
@@ -379,7 +383,7 @@ class TestProviders:
         provider = AnthropicProvider()
         provider._client = FakeClient()
 
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError, match="stop here"):
             provider.complete(
                 model="claude-opus-5",
                 messages=[{"role": "user", "content": "hi"}],

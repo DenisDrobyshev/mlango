@@ -70,9 +70,7 @@ class Command(BaseCommand):
             if previous:
                 dependencies.append((app_label, previous))
 
-            writer = MigrationWriter(
-                app_label, filename, operations, dependencies, initial=initial
-            )
+            writer = MigrationWriter(app_label, filename, operations, dependencies, initial=initial)
 
             self.write(self.style.bold(f"{app_label}/migrations/{filename}.py"))
             for operation in operations:

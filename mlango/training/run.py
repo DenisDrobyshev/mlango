@@ -263,7 +263,9 @@ class RunContext:
 # --------------------------------------------------------------------------- #
 
 
-def recent_runs(limit: int = 20, *, kind: str | None = None, target: str | None = None) -> list[Run]:
+def recent_runs(
+    limit: int = 20, *, kind: str | None = None, target: str | None = None
+) -> list[Run]:
     from sqlalchemy import select
 
     with session_scope() as session:
@@ -284,11 +286,15 @@ def get_run(reference: str) -> Run | None:
             found = session.get(Run, int(reference))
             if found is not None:
                 return found
-        return session.execute(
-            select(Run)
-            .where(or_(Run.uuid.startswith(reference), Run.name == reference))
-            .order_by(Run.started_at.desc())
-        ).scalars().first()
+        return (
+            session.execute(
+                select(Run)
+                .where(or_(Run.uuid.startswith(reference), Run.name == reference))
+                .order_by(Run.started_at.desc())
+            )
+            .scalars()
+            .first()
+        )
 
 
 def metric_history(run_id: int, key: str) -> list[tuple[int, float]]:

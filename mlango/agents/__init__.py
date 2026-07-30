@@ -16,7 +16,7 @@ from mlango.agents.providers import (
     available_providers,
     get_provider,
 )
-from mlango.agents.tools import Tool, ToolError, ToolResult, Toolbox, tool
+from mlango.agents.tools import Tool, Toolbox, ToolError, ToolResult, tool
 from mlango.agents.tracing import Tracer, get_trace, recent_traces
 
 __all__ = [

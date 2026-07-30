@@ -1,0 +1,173 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  lint:
+    name: Lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install -e ".[dev]"
+      - name: ruff check
+        run: ruff check mlango tests
+      - name: ruff format --check
+        run: ruff format --check mlango tests
+      - name: mypy
+        run: mypy mlango
+        continue-on-error: true
+
+  test:
+    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.11"
+          - os: ubuntu-latest
+            python: "3.12"
+          - os: ubuntu-latest
+            python: "3.13"
+          - os: macos-latest
+            python: "3.12"
+          - os: windows-latest
+            python: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install with the scikit-learn extra
+        run: pip install -e ".[sklearn,dev]"
+      - name: Run the test suite
+        run: pytest -q --cov=mlango --cov-report=xml --cov-report=term-missing
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+
+  quickstart:
+    name: Scaffolded project works end to end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install -e ".[sklearn]"
+
+      # The README promises four commands from nothing to a working admin.
+      # This job is what keeps that promise honest.
+      - name: startproject
+        run: mlango startproject demoproject
+
+      - name: check
+        working-directory: demoproject
+        run: python manage.py check
+
+      - name: migrate
+        working-directory: demoproject
+        run: |
+          python manage.py migrate
+          python manage.py makemigrations
+          python manage.py migrate
+
+      - name: train, evaluate, sweep
+        working-directory: demoproject
+        run: |
+          python manage.py train demo.Sentiment
+          python manage.py evaluate demo.SentimentAccuracy --min-pass-rate 0.9
+          python manage.py sweep demo.Sentiment -p C=0.5,2.0 --metric accuracy --mode max
+
+      - name: agent, runs, traces, dataset
+        working-directory: demoproject
+        run: |
+          python manage.py agent demo.Helper 'hello there'
+          python manage.py runs list
+          python manage.py traces list
+          python manage.py dataset head demo.Reviews -n 3
+          python manage.py dataset materialize demo.Reviews
+
+      - name: serve, then probe the admin and the API
+        working-directory: demoproject
+        run: |
+          python manage.py runserver 8099 &
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8099/api/health >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8099/api/health
+          echo
+          curl -sf -X POST http://127.0.0.1:8099/api/predict/ \
+            -H 'Content-Type: application/json' \
+            -d '{"input": "great movie, loved every minute"}'
+          echo
+          curl -sf -X POST http://127.0.0.1:8099/api/chat/ \
+            -H 'Content-Type: application/json' \
+            -d '{"message": "hello"}'
+          echo
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8099/admin/)" = "200"
+
+  build:
+    name: Package builds and installs cleanly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - name: Build the wheel and sdist
+        run: python -m build
+      - name: Check the metadata
+        run: twine check dist/*
+      - name: Install the wheel into a clean environment
+        run: |
+          python -m venv /tmp/fresh
+          /tmp/fresh/bin/pip install dist/*.whl
+          /tmp/fresh/bin/mlango --version
+          /tmp/fresh/bin/python -c "import mlango; print(mlango.get_version())"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  docs:
+    name: Documentation builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install mkdocs-material mkdocs-static-i18n
+      - name: Build in strict mode
+        run: mkdocs build --strict

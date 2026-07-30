@@ -63,7 +63,9 @@ class Tracer:
                 session.flush()
                 self.trace_id, self.uuid = trace.id, trace.uuid
         except Exception:
-            logger.exception("Could not open a trace for %s; continuing untraced.", self.agent_label)
+            logger.exception(
+                "Could not open a trace for %s; continuing untraced.", self.agent_label
+            )
             self.enabled = False
         return self
 

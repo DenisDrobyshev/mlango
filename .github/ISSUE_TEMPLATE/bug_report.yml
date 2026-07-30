@@ -1,0 +1,61 @@
+name: Bug report
+description: Something does not work the way the docs say it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. A small reproduction saves far more time
+        than a long description.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Smallest reproduction
+      description: >-
+        The smallest declaration that shows the problem. A `Dataset`, `Model`,
+        `Agent` or `Eval` class plus the command you ran is usually enough.
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: check-output
+    attributes:
+      label: Output of `python manage.py check`
+      description: This tells us about your settings, backends and migrations in one go.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: 'Output of: `python -c "import mlango, sys; print(mlango.get_version(), sys.version)"`'
+      placeholder: 0.1.0 3.12.7 (main, ...) [MSC v.1929 64 bit (AMD64)]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Linux, macOS, Windows, Other]
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Traceback
+      description: 'Run the command again with `--traceback` if it printed only a message.'
+      render: shell

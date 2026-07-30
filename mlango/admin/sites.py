@@ -8,7 +8,6 @@ you customise columns, filters and search.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 from mlango.admin.options import DEFAULTS, ObjectAdmin

@@ -81,7 +81,7 @@ class DeclarativeMeta(type):
         cls = super().__new__(mcls, name, bases, body, **kwargs)
 
         kind = body.get("_kind") or next(
-            (getattr(b, "_kind") for b in cls.__mro__[1:] if getattr(b, "_kind", None)), "object"
+            (b._kind for b in cls.__mro__[1:] if getattr(b, "_kind", None)), "object"
         )
         allowed = tuple(
             dict.fromkeys(
@@ -220,9 +220,7 @@ class Declarative(metaclass=DeclarativeMeta):
         instance = cls(**{k: v for k, v in payload.items() if cls._meta.has_field(k)})
         unknown = sorted(set(payload) - set(cls._meta.field_names))
         if unknown:
-            raise ValidationError(
-                {"__all__": [f"Unknown field(s): {', '.join(unknown)}"]}
-            )
+            raise ValidationError({"__all__": [f"Unknown field(s): {', '.join(unknown)}"]})
         return instance.full_clean()
 
     # -- identity ------------------------------------------------------------

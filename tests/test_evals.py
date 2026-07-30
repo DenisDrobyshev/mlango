@@ -100,7 +100,11 @@ class Cases(Dataset):
         primary_key = "id"
         source = InMemorySource(
             [
-                {"id": 1, "question": 'use lookup {"query": "keys"}', "answer": "docs/keys.md explains it"},
+                {
+                    "id": 1,
+                    "question": 'use lookup {"query": "keys"}',
+                    "answer": "docs/keys.md explains it",
+                },
                 {"id": 2, "question": "hello", "answer": "something else entirely"},
             ]
         )
@@ -122,7 +126,11 @@ class Quality(Eval):
         input_field = "question"
         expected_field = "answer"
         case_id_field = "id"
-        scorers = {"overlap": token_f1, "cited": contains_all("docs/"), "searched": used_tool("lookup")}
+        scorers = {
+            "overlap": token_f1,
+            "cited": contains_all("docs/"),
+            "searched": used_tool("lookup"),
+        }
         threshold = 0.5
 
 

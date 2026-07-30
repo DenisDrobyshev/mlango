@@ -152,7 +152,7 @@ htmlcov/
 REQUIREMENTS = """mlango[sklearn]
 """
 
-PROJECT_README = '''# __PROJECT__
+PROJECT_README = """# __PROJECT__
 
 An [mlango](https://github.com/DenisDrobyshev/mlango) project.
 
@@ -204,7 +204,7 @@ export ANTHROPIC_API_KEY=...
 ```
 
 and set `DEFAULT_PROVIDER = "anthropic"` in `__PROJECT__/settings.py`.
-'''
+"""
 
 
 # --------------------------------------------------------------------------- #
@@ -556,9 +556,7 @@ def render_project(name: str, target: str, *, demo: bool = True) -> list[str]:
         tree[f"{name}/settings.py"] = SETTINGS_PY.replace(
             '    "demo",\n', "    # Add your apps here.\n"
         )
-        tree["README.md"] = PROJECT_README.replace(
-            "python manage.py train demo.Sentiment\n", ""
-        )
+        tree["README.md"] = PROJECT_README.replace("python manage.py train demo.Sentiment\n", "")
 
     created = []
     for relative, content in tree.items():

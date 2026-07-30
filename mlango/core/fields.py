@@ -472,7 +472,7 @@ class TensorField(Field):
             raise ValidationError(
                 f"Expected a {len(self.shape)}-D tensor, got shape {actual}.", field=self.name
             )
-        for expected, got in zip(self.shape, actual):
+        for expected, got in zip(self.shape, actual, strict=True):
             if expected is not None and expected != got:
                 raise ValidationError(
                     f"Expected shape {self.shape}, got {actual}.", field=self.name

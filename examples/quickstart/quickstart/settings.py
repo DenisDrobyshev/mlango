@@ -40,9 +40,9 @@ ROOT_ROUTECONF = "quickstart.routes"
 DEFAULT_PROVIDER = "echo"
 DEFAULT_AGENT_MODEL = "claude-opus-5"
 
-# Applied to every training run.
+# Applied to every training run. Metric recording is built in, so this list is
+# purely additive.
 DEFAULT_CALLBACKS = [
-    "mlango.training.callbacks.MetricLogger",
     "mlango.training.callbacks.ProgressBar",
 ]
 

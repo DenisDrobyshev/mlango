@@ -10,7 +10,8 @@ theme:
   name: material
   language: en
   features:
-    - navigation.instant
+    # navigation.instant is deliberately absent: it breaks the i18n language
+    # switcher, and a working switcher matters more for an international project.
     - navigation.tracking
     - navigation.sections
     - navigation.top

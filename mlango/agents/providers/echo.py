@@ -105,7 +105,11 @@ def _last_text(messages: list[dict[str, Any]], *, role: str) -> str:
         if isinstance(content, str):
             return content
         if isinstance(content, list):
-            parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+            parts = [
+                b.get("text", "")
+                for b in content
+                if isinstance(b, dict) and b.get("type") == "text"
+            ]
             if parts:
                 return "".join(parts)
     return ""
@@ -130,9 +134,7 @@ def _summarise_tool_results(messages: list[dict[str, Any]]) -> str:
     for block in blocks:
         content = block.get("content")
         if isinstance(content, list):
-            content = " ".join(
-                str(c.get("text", "")) for c in content if isinstance(c, dict)
-            )
+            content = " ".join(str(c.get("text", "")) for c in content if isinstance(c, dict))
         rendered.append(str(content))
     return "tool results: " + "; ".join(rendered)
 
@@ -146,5 +148,7 @@ def _rough_tokens(messages: list[dict[str, Any]], system: str) -> int:
     total = _rough_tokens_text(system)
     for message in messages:
         content = message.get("content")
-        total += _rough_tokens_text(content if isinstance(content, str) else json.dumps(content, default=str))
+        total += _rough_tokens_text(
+            content if isinstance(content, str) else json.dumps(content, default=str)
+        )
     return total

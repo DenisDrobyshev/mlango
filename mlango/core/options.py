@@ -57,9 +57,7 @@ class Options:
         if self.meta is None:
             return
         declared = {
-            name: getattr(self.meta, name)
-            for name in dir(self.meta)
-            if not name.startswith("_")
+            name: getattr(self.meta, name) for name in dir(self.meta) if not name.startswith("_")
         }
         unknown = sorted(set(declared) - set(self._allowed))
         if unknown:

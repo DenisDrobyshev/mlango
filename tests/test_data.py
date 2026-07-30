@@ -6,7 +6,7 @@ import pytest
 
 from mlango.core import fields
 from mlango.core.exceptions import DoesNotExist, FieldError, ValidationError
-from mlango.data import Dataset, CSVSource, InMemorySource, JSONLSource, Record
+from mlango.data import CSVSource, Dataset, InMemorySource, JSONLSource
 
 
 class TestLookups:
@@ -40,7 +40,7 @@ class TestRecords:
     def test_attribute_error_names_available_fields(self, reviews):
         record = reviews.objects.first()
         with pytest.raises(AttributeError, match="Present:"):
-            record.nope
+            _ = record.nope
 
 
 class TestPipeline:
@@ -154,9 +154,13 @@ class TestSplits:
                 source = InMemorySource(rows)
                 primary_key = "id"
 
-        before = set(Growing.objects.split(train=0.8, test=0.2)["train"].values_list("id", flat=True))
+        before = set(
+            Growing.objects.split(train=0.8, test=0.2)["train"].values_list("id", flat=True)
+        )
         rows.extend({"id": i, "text": f"t{i}", "label": "pos"} for i in range(50, 80))
-        after = set(Growing.objects.split(train=0.8, test=0.2)["train"].values_list("id", flat=True))
+        after = set(
+            Growing.objects.split(train=0.8, test=0.2)["train"].values_list("id", flat=True)
+        )
 
         # This is the property that keeps a held-out set trustworthy over time.
         assert before <= after

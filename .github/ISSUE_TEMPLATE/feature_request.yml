@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest something mlango should make easier.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        mlango's goal is a low barrier to entry. Proposals that remove work from
+        the user land best.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: Describe the task, not the solution. What is awkward today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would it look like
+      description: >-
+        Sketch the declaration or the command. Showing the code you wish you
+        could write is the most useful thing you can include.
+      render: python
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do instead today
+      description: The workaround, if there is one.
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Which layer
+      multiple: true
+      options:
+        - Datasets
+        - Models and training
+        - Agents
+        - Evaluation
+        - Admin
+        - Serving
+        - Migrations
+        - Command line
+        - Documentation
+        - Not sure

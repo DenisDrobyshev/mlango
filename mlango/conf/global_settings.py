@@ -102,6 +102,18 @@ ADMIN_SITE_HEADER: str = "mlango administration"
 ADMIN_SITE_TITLE: str = "mlango"
 ADMIN_PAGE_SIZE: int = 25
 
+#: Set a password to require HTTP Basic auth on the admin. Empty means the
+#: admin is unauthenticated, which is fine locally and never fine in public.
+#: For real deployments, put the admin behind your identity provider.
+ADMIN_USERNAME: str = "admin"
+ADMIN_PASSWORD: str = ""
+
+#: Shared keys accepted on /api routes by ApiKeyMiddleware. Empty disables it.
+SERVE_API_KEYS: list[str] = []
+
+#: Terms that cause GuardrailMiddleware to reject a request body.
+SERVE_BLOCKED_TERMS: list[str] = []
+
 #: Dotted path to the module holding ``urlpatterns`` for the inference API.
 ROOT_ROUTECONF: str | None = None
 

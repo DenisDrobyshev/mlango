@@ -196,8 +196,7 @@ class Eval(Declarative):
         expected = case.get(expected_name) if expected_name else None
         text = _as_text(output)
         return {
-            name: fn(output if _wants_run(fn) else text, expected)
-            for name, fn in scorers.items()
+            name: fn(output if _wants_run(fn) else text, expected) for name, fn in scorers.items()
         }
 
     def decide(self, scores: dict[str, Any]) -> bool | None:
@@ -265,7 +264,9 @@ class Eval(Declarative):
                     entry["trace_uuid"] = getattr(output, "trace_uuid", "") or ""
                 except Exception as exc:  # noqa: BLE001 - recorded per case
                     logger.exception("Case %s of %s failed", case_id, opts.label)
-                    entry.update({"error": f"{type(exc).__name__}: {exc}", "passed": False, "scores": {}})
+                    entry.update(
+                        {"error": f"{type(exc).__name__}: {exc}", "passed": False, "scores": {}}
+                    )
                     if fail_fast:
                         report.add(entry)
                         self._persist(run, opts.label, [entry], EvalResult, session_scope)

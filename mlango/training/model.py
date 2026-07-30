@@ -196,7 +196,9 @@ class Model(Declarative):
         from mlango.conf import settings
 
         opts = type(self)._meta
-        dataset_class = dataset or (queryset.dataset if queryset is not None else self.get_dataset())
+        dataset_class = dataset or (
+            queryset.dataset if queryset is not None else self.get_dataset()
+        )
         trainer = self.get_trainer()
         params = self.params
         target = self.get_target(dataset_class)
@@ -443,6 +445,42 @@ class Model(Declarative):
             session.flush()
             return target
 
+    # -- sweeps --------------------------------------------------------------
+
+    @classmethod
+    def sweep(cls, space: dict[str, list[Any]] | None = None, **options: Any) -> Any:
+        """Train once per point in a search space and report the best trial.
+
+        With no explicit ``space``, every field marked ``tunable=True`` is
+        varied around its default.
+        """
+        from mlango.training.sweep import run_sweep
+
+        if space is None:
+            space = cls.default_space()
+            if not space:
+                raise ImproperlyConfigured(
+                    f"{cls._meta.label} declares no tunable fields, so there is nothing to "
+                    f"sweep. Mark a field with tunable=True, or pass an explicit space."
+                )
+        return run_sweep(cls, space, **options)
+
+    @classmethod
+    def default_space(cls) -> dict[str, list[Any]]:
+        """A small search space around each tunable field's default."""
+        space: dict[str, list[Any]] = {}
+        for field in cls._meta.tunable_fields:
+            default = field.get_default()
+            if isinstance(default, bool):
+                space[field.name or ""] = [True, False]
+            elif isinstance(default, int):
+                space[field.name or ""] = sorted({max(1, default // 2), default, default * 2})
+            elif isinstance(default, float):
+                space[field.name or ""] = sorted({default / 2, default, default * 2})
+            elif field.choices:
+                space[field.name or ""] = list(field.choices)
+        return space
+
     # -- serving -------------------------------------------------------------
 
     @classmethod
@@ -462,7 +500,9 @@ class Model(Declarative):
             "label": cls._meta.label,
             "task": cls.get_task(),
             "trainer": extras.get("trainer"),
-            "dataset": getattr(dataset, "_meta", None).label if hasattr(dataset, "_meta") else dataset,
+            "dataset": getattr(dataset, "_meta", None).label
+            if hasattr(dataset, "_meta")
+            else dataset,
             "hyperparameters": {f.name: f.get_default() for f in cls._meta.fields},
             "tunable": [f.name for f in cls._meta.tunable_fields],
         }

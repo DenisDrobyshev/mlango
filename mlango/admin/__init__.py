@@ -1,10 +1,10 @@
 """The mlango administration site.
 
-    from mlango import admin
+from mlango import admin
 
-    @admin.register(Reviews)
-    class ReviewsAdmin(admin.ObjectAdmin):
-        list_display = ("id", "text", "label")
+@admin.register(Reviews)
+class ReviewsAdmin(admin.ObjectAdmin):
+    list_display = ("id", "text", "label")
 """
 
 from mlango.admin.options import (

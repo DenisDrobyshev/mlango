@@ -98,7 +98,9 @@ class Signal:
 
     def send_strict(self, sender: Any, **kwargs: Any) -> list[tuple[Callable[..., Any], Any]]:
         """Like :meth:`send`, but the first failing receiver propagates."""
-        return [(fn, fn(sender=sender, signal=self, **kwargs)) for fn in self._live_receivers(sender)]
+        return [
+            (fn, fn(sender=sender, signal=self, **kwargs)) for fn in self._live_receivers(sender)
+        ]
 
     def __repr__(self) -> str:
         return f"<Signal {self.name!r} ({len(self._receivers)} receivers)>"

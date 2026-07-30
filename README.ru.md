@@ -1,0 +1,290 @@
+# mlango
+
+**Фреймворк «с батарейками» для машинного обучения, аналитики и LLM-агентов — построенный на философии Django.**
+
+*Read this in [English](README.md).*
+
+[![CI](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml/badge.svg)](https://github.com/DenisDrobyshev/mlango/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+ML-проекты имеют свойство превращаться в свалку скриптов: один загружает данные,
+другой обучает, где-то лежит ноутбук, выдавший цифру для презентации за прошлый
+квартал, и папка `checkpoints/`, которую уже никто не сопоставит с коммитом.
+
+В веб-разработке была ровно такая же проблема, и Django её решил — не тем, что
+выпустил более удачную библиотеку, а тем, что стал **фреймворком**: структура
+проекта, модуль настроек, декларативные классы, миграции, автоматическая админка
+и `manage.py`, который всё связывает.
+
+mlango применяет этот ответ к машинному обучению. Вы объявляете датасеты, модели,
+агентов и оценки; фреймворк их запускает, версионирует, записывает и показывает
+вам.
+
+```python
+# reviews/datasets.py
+from mlango.core import fields
+from mlango.data import Dataset, JSONLSource
+
+class Reviews(Dataset):
+    """Отзывы покупателей о товарах."""
+
+    id = fields.IntegerField()
+    text = fields.TextField()
+    label = fields.LabelField(["negative", "positive"])
+
+    class Meta:
+        source = JSONLSource("data/reviews.jsonl")
+        primary_key = "id"
+```
+
+```python
+# reviews/models.py
+from mlango.core import fields
+from mlango.training import Model
+from reviews.datasets import Reviews
+
+class Sentiment(Model):
+    """TF-IDF и логистическая регрессия."""
+
+    max_features = fields.IntegerField(default=20_000, tunable=True)
+    C = fields.FloatField(default=1.0, min_value=0.0, tunable=True)
+
+    class Meta:
+        dataset = Reviews
+        trainer = "sklearn"
+        task = "classification"
+        features = ["text"]
+
+    def build(self):
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.pipeline import make_pipeline
+        return make_pipeline(
+            TfidfVectorizer(max_features=self.max_features),
+            LogisticRegression(C=self.C),
+        )
+```
+
+```bash
+python manage.py train reviews.Sentiment -p C=2.0
+```
+
+Эта одна команда находит ваш класс, открывает отслеживаемый ран, ставит сид всем
+генераторам случайных чисел, детерминированно режет данные, вызывает ваш
+`build()`, ведёт цикл обучения, пишет метрики, фиксирует git-коммит, сохраняет
+артефакт и регистрирует версию модели, готовую к промоуту. Вы написали `build()`
+и четыре объявления полей.
+
+---
+
+## Установка
+
+```bash
+pip install "mlango[sklearn]"
+```
+
+Extras: `sklearn`, `torch`, `anthropic`, `dev`, `docs`, `all`.
+
+## Пять минут с нуля
+
+```bash
+mlango startproject myproject
+cd myproject
+python manage.py migrate
+python manage.py train demo.Sentiment
+python manage.py runserver
+```
+
+Откройте <http://127.0.0.1:8000/admin/>. В отличие от пустого каркаса, свежий
+проект mlango **уже содержит рабочий пример** — датасет, обученную модель с
+настоящими метриками, агента с инструментом и набор оценок. В админке с первого
+взгляда есть что смотреть.
+
+Настраивать для этого ничего не нужно: метастор — SQLite, артефакты пишутся в
+локальную папку, агенты работают на офлайн-провайдере без API-ключа.
+
+---
+
+## Что вы получаете
+
+### Декларативные классы с `_meta`
+
+Четыре семейства, одна механика. Всё универсальное в фреймворке — админка,
+миграции, CLI, схемы API — написано против `_meta`, а не против конкретного
+класса. Именно поэтому одна админка отображает все четыре типа объектов.
+
+| Вы объявляете | Вы получаете |
+|---|---|
+| `Dataset` | Ленивый queryset, валидацию схемы, детерминированные сплиты, версионирование по содержимому |
+| `Model` | Гиперпараметры как валидируемые поля, отслеживаемые раны, колбэки, реестр моделей со стадиями |
+| `Agent` | Цикл использования инструментов, схемы из аннотаций типов, память, пошаговый трейсинг |
+| `Eval` | Пооценочные результаты в метасторе — регрессия становится диффом между двумя ранами |
+
+### QuerySet для данных
+
+Ленивый, композируемый, записываемый рядом с раном, который его использовал:
+
+```python
+parts = Reviews.objects.filter(label="positive").shuffle(seed=0).split(train=0.8, val=0.2)
+
+for batch in parts["train"].batch(32):
+    ...
+```
+
+Лукапы как в Django — `filter(stars__gte=4)`, `exclude(text__icontains="spam")`,
+`filter(language__in=["en", "de"])`. Сплиты назначаются по хешу ключа записи,
+поэтому **добавление строк никогда не перемещает существующие между train и
+test** — именно это свойство делает отложенную выборку по-прежнему честной через
+полгода.
+
+### Миграции для схем
+
+```bash
+python manage.py makemigrations
+python manage.py migrate
+```
+
+Изменение полей датасета генерирует настоящий, читаемый файл миграции. Миграции
+данных — через `RunPython`, как и ожидается.
+
+### Админка, которую вы не писали
+
+Каждый объявленный объект появляется автоматически, без регистрации.
+Регистрируйте только чтобы изменить вид:
+
+```python
+@admin.register(Reviews)
+class ReviewsAdmin(admin.ObjectAdmin):
+    list_display = ("id", "text", "label")
+    list_filter = ("label",)
+    search_fields = ("text",)
+```
+
+Админка показывает предпросмотр данных с фильтрами и поиском, историю ранов с
+графиками метрик, сравнение ранов рядом, версии датасетов и моделей с промоутом
+в один клик, и пошаговый просмотр каждого вызова агента. Серверный рендеринг,
+без сборки и без CDN.
+
+### Агенты как декларации
+
+```python
+from mlango.agents import Agent, BufferMemory, tool
+
+@tool
+def search_docs(query: str, limit: int = 5) -> list[str]:
+    """Поиск по документации продукта.
+
+    Args:
+        query: Что искать.
+        limit: Максимум результатов.
+    """
+    return retrieve(query, limit)
+
+class Support(Agent):
+    """Отвечает на вопросы о продукте по документации."""
+
+    class Meta:
+        model = "claude-opus-5"
+        system = "Ты инженер поддержки. Ссылайся на использованные разделы."
+        tools = [search_docs]
+        memory = BufferMemory(k=20)
+```
+
+JSON-схема берётся из аннотаций типов и докстроки, так что инструмент описан
+ровно в одном месте. Цикл, повторы, диспетчеризацию инструментов, учёт токенов и
+трейсинг берёт на себя фреймворк.
+
+### Развёртывание из той же декларации
+
+```python
+# myproject/routes.py
+from mlango.serve import path
+
+urlpatterns = [
+    path("predict/", Sentiment.as_endpoint(stage="production")),
+    path("chat/", Support.as_endpoint()),
+]
+```
+
+`manage.py runserver` поднимает админку и документированный API вместе;
+OpenAPI-схемы выводятся из деклараций, поэтому `/api/docs` описывает входы вашей
+модели без единой строки схемы.
+
+---
+
+## Командная строка
+
+```bash
+python manage.py check                          # проверить весь проект
+python manage.py dataset head reviews.Reviews   # заглянуть в данные
+python manage.py makemigrations && python manage.py migrate
+python manage.py train reviews.Sentiment -p C=2.0 --tag baseline
+python manage.py sweep reviews.Sentiment -p C=0.25,1,4 --promote-best production
+python manage.py runs list
+python manage.py runs compare 7c8f1020 c089b7e6
+python manage.py evaluate reviews.Accuracy --min-pass-rate 0.9
+python manage.py agent support.Support           # интерактивная сессия
+python manage.py traces show a1b2c3d4            # воспроизвести вызов агента
+python manage.py test                            # тесты на временном метасторе
+python manage.py shell                           # всё уже импортировано
+python manage.py runserver
+```
+
+Приложения могут поставлять свои команды в `<app>/management/commands/` — они
+появляются в `manage.py help` автоматически, включая переопределение встроенных.
+
+---
+
+## Конфигурация
+
+Один модуль настроек, все значения по умолчанию задокументированы в
+`mlango.conf.global_settings`. Бэкенды меняются настройкой, а не переписыванием
+кода:
+
+```python
+METASTORE = {"URL": "postgresql://user@host/mlango"}   # по умолчанию SQLite
+STORAGE = {"BACKEND": "myproject.storage.S3Storage"}
+TRAINERS = {"lightgbm": "myproject.trainers.LightGBMTrainer"}
+PROVIDERS = {"vllm": "myproject.providers.VLLMProvider"}
+SERVE_MIDDLEWARE = ["mlango.serve.middleware.ApiKeyMiddleware", ...]
+```
+
+---
+
+## Почему это фреймворк, а не библиотека
+
+Библиотеку вы вызываете. Фреймворк вызывает вас. Эта инверсия — вся суть, и
+именно она покупает перечисленные удобства:
+
+- **Структура проекта и настройки** — `manage.py`, `MLANGO_SETTINGS_MODULE`
+- **Реестр приложений** — автодискавери `datasets.py`, `models.py`, `agents.py`, `evals.py`, `admin.py`
+- **Миграции** — генерируемые, читаемые файлы для объявленных схем
+- **Админка из деклараций**
+- **Система команд**, которую приложения расширяют и переопределяют
+- **Сигналы** — `run_finished`, `epoch_finished`, `tool_called` и другие
+- **Подключаемые бэкенды** за настройками
+
+Будь mlango библиотекой, вы бы всё ещё писали цикл обучения, схему трекинга,
+админку и CLI. Именно потому, что это фреймворк, их писать не нужно.
+
+---
+
+## Документация
+
+Полная документация с учебником, собирающим проект от начала до конца:
+**<https://denisdrobyshev.github.io/mlango/ru/>**
+
+## Участие
+
+Вклад приветствуется — см. [CONTRIBUTING.md](CONTRIBUTING.md) для настройки
+окружения и [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) для правил сообщества.
+Переводы документации особенно нужны — по одной странице за раз, см.
+[Перевод](docs/translating.md).
+
+## Лицензия
+
+MIT — см. [LICENSE](LICENSE).
+
+mlango не связан с Django Software Foundation и не поддерживается ею. Он с
+благодарностью заимствует философию Django.

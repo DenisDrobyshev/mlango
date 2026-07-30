@@ -44,9 +44,7 @@ class MigrationLoader:
         if not os.path.isdir(directory):
             return []
         names = [
-            filename[:-3]
-            for filename in os.listdir(directory)
-            if MIGRATION_RE.match(filename)
+            filename[:-3] for filename in os.listdir(directory) if MIGRATION_RE.match(filename)
         ]
         return sorted(names)
 

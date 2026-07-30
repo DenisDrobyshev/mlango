@@ -23,7 +23,7 @@ from typing import Any
 
 from mlango.agents.memory import Memory, NullMemory
 from mlango.agents.providers.base import Completion, Provider, Usage, get_provider
-from mlango.agents.tools import Tool, ToolResult, Toolbox
+from mlango.agents.tools import Tool, Toolbox, ToolResult
 from mlango.agents.tracing import Tracer
 from mlango.core.base import Declarative
 from mlango.core.exceptions import ProviderError, RunError
@@ -224,7 +224,9 @@ class Agent(Declarative):
 
         for step in range(1, limit + 1):
             result.steps = step
-            with tracer.span(f"llm:{self.get_model()}", Span.LLM, {"messages": len(messages)}) as span:
+            with tracer.span(
+                f"llm:{self.get_model()}", Span.LLM, {"messages": len(messages)}
+            ) as span:
                 completion = provider.complete(
                     model=self.get_model(),
                     messages=messages,
@@ -246,7 +248,7 @@ class Agent(Declarative):
             if completion.stop_reason == Completion.REFUSAL:
                 detail = completion.refusal or {}
                 result.error = (
-                    f"The model declined this request"
+                    "The model declined this request"
                     + (f" ({detail.get('category')})" if detail.get("category") else "")
                     + "."
                 )

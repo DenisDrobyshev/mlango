@@ -60,6 +60,25 @@ class Command(BaseCommand):
         for name, ok in available_providers().items():
             self.write(f"  provider   {name}: {'available' if ok else 'missing dependency'}")
 
+        # Dotted-path settings only fail when something first uses them, which
+        # in a sweep means the same import error repeated once per trial.
+        # Resolving them here turns that into one clear message up front.
+        self.write("")
+        self.write(self.style.bold("Wiring"))
+        errors.extend(self._resolve_paths("DEFAULT_CALLBACKS", settings.DEFAULT_CALLBACKS))
+        errors.extend(self._resolve_paths("SERVE_MIDDLEWARE", settings.SERVE_MIDDLEWARE))
+        errors.extend(self._resolve_paths("STORAGE.BACKEND", [settings.STORAGE.get("BACKEND")]))
+        if settings.ROOT_ROUTECONF:
+            try:
+                from mlango.serve.routing import load_routes
+
+                routes = load_routes()
+                self.write(f"  routes     {len(routes)} endpoint(s)")
+            except Exception as exc:
+                errors.append(f"ROOT_ROUTECONF could not be loaded: {exc}")
+        else:
+            self.write(self.style.dim("  routes     (ROOT_ROUTECONF is not set)"))
+
         self.write("")
         self.write(self.style.bold("Migrations"))
         try:
@@ -77,10 +96,17 @@ class Command(BaseCommand):
         self.write(self.style.bold("Admin"))
         try:
             from mlango.admin import site
+            from mlango.admin.auth import auth_configured
 
             site.autodiscover()
             errors.extend(site.check())
             self.write(f"  registered {len(site)} object(s)")
+            self.write(f"  auth       {'enabled' if auth_configured() else 'off'}")
+            if not auth_configured() and not settings.DEBUG:
+                warnings.append(
+                    "The admin is unauthenticated and DEBUG is off. Set ADMIN_PASSWORD, "
+                    "or put the admin behind your identity provider."
+                )
         except Exception as exc:
             errors.append(f"Could not build the admin site: {exc}")
 
@@ -95,3 +121,21 @@ class Command(BaseCommand):
         if warnings and options["fail_level"] == "warning":
             raise CommandError(f"{len(warnings)} warning(s) found.")
         self.ok(f"Check complete — {len(warnings)} warning(s), no errors.")
+
+    def _resolve_paths(self, setting: str, paths: list[Any]) -> list[str]:
+        """Import each dotted path, reporting the ones that do not resolve."""
+        from mlango.core.module_loading import import_string
+
+        problems: list[str] = []
+        entries = [p for p in paths if p]
+        if not entries:
+            self.write(self.style.dim(f"  {setting.split('.')[0].lower():<10} (empty)"))
+            return problems
+
+        for dotted in entries:
+            try:
+                import_string(str(dotted))
+                self.write(f"  {'ok':<10} {setting}: {dotted}")
+            except Exception as exc:
+                problems.append(f"{setting} names {dotted!r}, which cannot be imported: {exc}")
+        return problems

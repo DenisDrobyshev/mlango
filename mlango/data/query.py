@@ -51,9 +51,9 @@ LOOKUPS: dict[str, Callable[[Any, Any], bool]] = {
     "lte": lambda value, target: value is not None and value <= target,
     "in": lambda value, target: value in target,
     "contains": lambda value, target: target in value if value is not None else False,
-    "icontains": lambda value, target: str(target).lower() in str(value).lower()
-    if value is not None
-    else False,
+    "icontains": lambda value, target: (
+        str(target).lower() in str(value).lower() if value is not None else False
+    ),
     "startswith": lambda value, target: str(value).startswith(str(target)),
     "endswith": lambda value, target: str(value).endswith(str(target)),
     "isnull": lambda value, target: (value is None) is bool(target),
@@ -96,7 +96,9 @@ def _matches(record: dict[str, Any], conditions: dict[str, Any]) -> bool:
 class DataQuerySet:
     """An immutable, lazily-evaluated view over a dataset."""
 
-    def __init__(self, dataset: type, source: Any = None, pipeline: list[dict[str, Any]] | None = None):
+    def __init__(
+        self, dataset: type, source: Any = None, pipeline: list[dict[str, Any]] | None = None
+    ):
         self.dataset = dataset
         self._source = source
         self._pipeline: list[dict[str, Any]] = list(pipeline or [])
@@ -400,7 +402,9 @@ class DataQuerySet:
                 if key == "op":
                     continue
                 if callable(value):
-                    entry[key] = f"{getattr(value, '__module__', '?')}.{getattr(value, '__qualname__', 'fn')}"
+                    entry[key] = (
+                        f"{getattr(value, '__module__', '?')}.{getattr(value, '__qualname__', 'fn')}"
+                    )
                 elif isinstance(value, dict) and any(callable(v) for v in value.values()):
                     entry[key] = sorted(value)
                 else:

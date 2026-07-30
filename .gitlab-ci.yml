@@ -1,0 +1,92 @@
+# GitLab mirror of the GitHub Actions pipeline in .github/workflows/ci.yml.
+# Keep the two in step: a contributor may only ever see one of them.
+
+stages: [lint, test, verify]
+
+default:
+  image: python:3.12
+  cache:
+    key:
+      files: [pyproject.toml]
+    paths: [.cache/pip]
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONUNBUFFERED: "1"
+
+lint:
+  stage: lint
+  script:
+    - pip install -e ".[dev]"
+    - ruff check mlango tests
+    - ruff format --check mlango tests
+    - mypy mlango || true
+
+test:
+  stage: test
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.10", "3.11", "3.12", "3.13"]
+  image: python:$PYTHON_VERSION
+  script:
+    - pip install -e ".[sklearn,dev]"
+    - pytest -q --cov=mlango --cov-report=term-missing --cov-report=xml
+  coverage: '/^TOTAL.+?(\d+\%)$/'
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+quickstart:
+  stage: verify
+  script:
+    - pip install -e ".[sklearn]"
+    # The README promises four commands from nothing to a working admin.
+    # This job is what keeps that promise honest.
+    - mlango startproject demoproject
+    - cd demoproject
+    - python manage.py check
+    - python manage.py migrate
+    - python manage.py makemigrations
+    - python manage.py migrate
+    - python manage.py train demo.Sentiment
+    - python manage.py evaluate demo.SentimentAccuracy --min-pass-rate 0.9
+    - python manage.py sweep demo.Sentiment -p C=0.5,2.0 --metric accuracy --mode max
+    - python manage.py agent demo.Helper 'hello there'
+    - python manage.py runs list
+    - python manage.py traces list
+    - python manage.py runserver 8099 &
+    - |
+      for _ in $(seq 1 30); do
+        curl -sf http://127.0.0.1:8099/api/health >/dev/null && break
+        sleep 1
+      done
+    - curl -sf http://127.0.0.1:8099/api/health
+    - |
+      curl -sf -X POST http://127.0.0.1:8099/api/predict/ \
+        -H 'Content-Type: application/json' \
+        -d '{"input": "great movie, loved every minute"}'
+    - test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8099/admin/)" = "200"
+
+build:
+  stage: verify
+  script:
+    - pip install build twine
+    - python -m build
+    - twine check dist/*
+    - python -m venv /tmp/fresh
+    - /tmp/fresh/bin/pip install dist/*.whl
+    - /tmp/fresh/bin/mlango --version
+  artifacts:
+    paths: [dist/]
+
+docs:
+  stage: verify
+  script:
+    - pip install mkdocs-material mkdocs-static-i18n
+    - mkdocs build --strict
+  artifacts:
+    paths: [site/]

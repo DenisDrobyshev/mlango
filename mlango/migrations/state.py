@@ -9,7 +9,8 @@ rebuilds what the code said when they were written. Comparing the two is how
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
+from dataclasses import field as dc_field
 from typing import Any
 
 from mlango.core.fields import Field
@@ -50,7 +51,7 @@ class ObjectState:
             "fields": [
                 {"name": name, **_deconstruct_payload(field_obj)} for name, field_obj in self.fields
             ],
-            "options": {k: v for k, v in sorted(self.options.items())},
+            "options": dict(sorted(self.options.items())),
         }
 
     def fingerprint(self) -> str:
@@ -114,7 +115,10 @@ class ProjectState:
         return ProjectState({key: obj.clone() for key, obj in self.objects.items()})
 
     def describe(self) -> dict[str, Any]:
-        return {obj.label: obj.describe() for obj in sorted(self.objects.values(), key=lambda o: o.label)}
+        return {
+            obj.label: obj.describe()
+            for obj in sorted(self.objects.values(), key=lambda o: o.label)
+        }
 
     def __len__(self) -> int:
         return len(self.objects)

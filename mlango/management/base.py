@@ -177,15 +177,20 @@ class BaseCommand:
         if not rows:
             self.write(self.style.dim("(nothing to show)"))
             return
-        cells = [[str(c) for c in row] for row in rows]
+        # Normalise to the header count: a ragged row is a display glitch, not a
+        # reason for the whole command to fail.
+        width = len(headers)
+        cells = [[str(c) for c in row][:width] + [""] * max(0, width - len(row)) for row in rows]
         widths = [
-            max(len(headers[i]), max((len(row[i]) for row in cells), default=0))
-            for i in range(len(headers))
+            max(len(headers[index]), max((len(row[index]) for row in cells), default=0))
+            for index in range(width)
         ]
-        self.write(self.style.bold("  ".join(h.ljust(w) for h, w in zip(headers, widths))))
+        self.write(
+            self.style.bold("  ".join(h.ljust(w) for h, w in zip(headers, widths, strict=True)))
+        )
         self.write(self.style.dim("  ".join("-" * w for w in widths)))
         for row in cells:
-            self.write("  ".join(c.ljust(w) for c, w in zip(row, widths)))
+            self.write("  ".join(c.ljust(w) for c, w in zip(row, widths, strict=True)))
 
 
 class LabelCommand(BaseCommand):

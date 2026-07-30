@@ -22,31 +22,49 @@ def _as_array(values: Sequence[Any]) -> np.ndarray:
 # --------------------------------------------------------------------------- #
 
 
+def _paired(y_true: Sequence[Any], y_pred: Sequence[Any]) -> tuple[list[Any], list[Any]]:
+    """Both sequences as lists, refusing to score a mismatched pair.
+
+    Silently zipping to the shorter sequence would report a plausible-looking
+    score computed from the wrong rows, which is worse than an error.
+    """
+    true, pred = list(y_true), list(y_pred)
+    if len(true) != len(pred):
+        raise ValueError(
+            f"Cannot score {len(pred)} prediction(s) against {len(true)} label(s) — "
+            f"the two must line up row for row."
+        )
+    return true, pred
+
+
 def accuracy(y_true: Sequence[Any], y_pred: Sequence[Any]) -> float:
-    true, pred = _as_array(y_true), _as_array(y_pred)
-    if true.size == 0:
+    true, pred = _paired(y_true, y_pred)
+    if not true:
         return 0.0
-    return float((true == pred).mean())
+    return float((_as_array(true) == _as_array(pred)).mean())
 
 
 def confusion(y_true: Sequence[Any], y_pred: Sequence[Any]) -> dict[str, dict[str, int]]:
-    labels = sorted({*map(str, y_true), *map(str, y_pred)})
-    matrix = {actual: {predicted: 0 for predicted in labels} for actual in labels}
-    for actual, predicted in zip(y_true, y_pred):
+    true, pred = _paired(y_true, y_pred)
+    labels = sorted({*map(str, true), *map(str, pred)})
+    matrix = {actual: dict.fromkeys(labels, 0) for actual in labels}
+    for actual, predicted in zip(true, pred, strict=True):
         matrix[str(actual)][str(predicted)] += 1
     return matrix
 
 
 def per_class(y_true: Sequence[Any], y_pred: Sequence[Any]) -> dict[str, dict[str, float]]:
     """Precision, recall, F1 and support for every class."""
-    labels = sorted({*map(str, y_true), *map(str, y_pred)})
-    true = [str(v) for v in y_true]
-    pred = [str(v) for v in y_pred]
+    raw_true, raw_pred = _paired(y_true, y_pred)
+    labels = sorted({*map(str, raw_true), *map(str, raw_pred)})
+    true = [str(v) for v in raw_true]
+    pred = [str(v) for v in raw_pred]
     out: dict[str, dict[str, float]] = {}
     for label in labels:
-        tp = sum(1 for t, p in zip(true, pred) if t == label and p == label)
-        fp = sum(1 for t, p in zip(true, pred) if t != label and p == label)
-        fn = sum(1 for t, p in zip(true, pred) if t == label and p != label)
+        pairs = list(zip(true, pred, strict=True))
+        tp = sum(1 for t, p in pairs if t == label and p == label)
+        fp = sum(1 for t, p in pairs if t != label and p == label)
+        fn = sum(1 for t, p in pairs if t == label and p != label)
         precision = tp / (tp + fp) if (tp + fp) else 0.0
         recall = tp / (tp + fn) if (tp + fn) else 0.0
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
@@ -104,7 +122,8 @@ def classification_report(y_true, y_pred) -> dict[str, Any]:
 
 
 def mse(y_true: Sequence[float], y_pred: Sequence[float]) -> float:
-    true, pred = _as_array(y_true).astype(float), _as_array(y_pred).astype(float)
+    raw_true, raw_pred = _paired(y_true, y_pred)
+    true, pred = _as_array(raw_true).astype(float), _as_array(raw_pred).astype(float)
     return float(np.mean((true - pred) ** 2)) if true.size else 0.0
 
 
@@ -113,12 +132,14 @@ def rmse(y_true, y_pred) -> float:
 
 
 def mae(y_true, y_pred) -> float:
-    true, pred = _as_array(y_true).astype(float), _as_array(y_pred).astype(float)
+    raw_true, raw_pred = _paired(y_true, y_pred)
+    true, pred = _as_array(raw_true).astype(float), _as_array(raw_pred).astype(float)
     return float(np.mean(np.abs(true - pred))) if true.size else 0.0
 
 
 def r2(y_true, y_pred) -> float:
-    true, pred = _as_array(y_true).astype(float), _as_array(y_pred).astype(float)
+    raw_true, raw_pred = _paired(y_true, y_pred)
+    true, pred = _as_array(raw_true).astype(float), _as_array(raw_pred).astype(float)
     if true.size == 0:
         return 0.0
     residual = float(np.sum((true - pred) ** 2))

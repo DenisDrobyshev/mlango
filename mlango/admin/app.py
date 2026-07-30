@@ -16,7 +16,8 @@ from fastapi import FastAPI, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from mlango.admin.sites import AdminSite, site as default_site
+from mlango.admin.sites import AdminSite
+from mlango.admin.sites import site as default_site
 
 logger = logging.getLogger("mlango.admin")
 
@@ -31,6 +32,16 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
     site.autodiscover()
 
     app = FastAPI(title=settings.ADMIN_SITE_TITLE, docs_url=None, redoc_url=None, openapi_url=None)
+
+    from mlango.admin.auth import BasicAuthMiddleware, auth_configured
+
+    app.add_middleware(BasicAuthMiddleware)
+    if not auth_configured() and not settings.DEBUG:
+        logger.warning(
+            "The admin is unauthenticated and DEBUG is off. Set ADMIN_PASSWORD, or put "
+            "the admin behind your identity provider."
+        )
+
     templates = Jinja2Templates(directory=TEMPLATE_DIR)
     templates.env.filters["short"] = _short
     templates.env.filters["duration"] = _duration
@@ -81,8 +92,7 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
     ) -> HTMLResponse:
         entry = site.get(label)
         filters = {
-            name: request.query_params.get(f"f_{name}", "")
-            for name in entry.get_list_filter()
+            name: request.query_params.get(f"f_{name}", "") for name in entry.get_list_filter()
         }
 
         context: dict[str, Any] = {
@@ -168,7 +178,9 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
         runs = [r for r in (get_run(ref) for ref in references) if r is not None]
         keys = sorted({k for run in runs for k in (run.summary or {})})
         params = sorted({k for run in runs for k in (run.params or {}) if not k.startswith("_")})
-        return page(request, "compare.html", runs=runs, metric_keys=keys, param_keys=params, ids=ids)
+        return page(
+            request, "compare.html", runs=runs, metric_keys=keys, param_keys=params, ids=ids
+        )
 
     # -- traces --------------------------------------------------------------
 
@@ -304,9 +316,7 @@ def _artifacts(run_id: int) -> list[Any]:
     from mlango.metastore.session import session_scope
 
     with session_scope() as session:
-        return list(
-            session.execute(select(Artifact).where(Artifact.run_id == run_id)).scalars()
-        )
+        return list(session.execute(select(Artifact).where(Artifact.run_id == run_id)).scalars())
 
 
 def _eval_results(run_id: int, limit: int = 100) -> list[Any]:

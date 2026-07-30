@@ -32,11 +32,9 @@ class Command(BaseCommand):
         host, port = _resolve_address(options, settings)
 
         counts = apps.summary()["counts"]
-        self.write(self.style.bold(f"mlango development server"))
+        self.write(self.style.bold("mlango development server"))
         self.write(f"  settings   {settings.SETTINGS_MODULE}")
-        self.write(
-            "  declared   " + ", ".join(f"{kind}s: {n}" for kind, n in counts.items())
-        )
+        self.write("  declared   " + ", ".join(f"{kind}s: {n}" for kind, n in counts.items()))
 
         routes = load_routes()
         if routes:

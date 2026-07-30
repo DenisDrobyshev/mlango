@@ -11,7 +11,6 @@ import importlib
 import os
 import pkgutil
 import sys
-from typing import Any
 
 from mlango.management.base import BaseCommand, CommandError
 
@@ -146,7 +145,7 @@ def _help(prog: str, target: str | None) -> int:
 def _summary(name: str, module_path: str) -> str:
     try:
         module = importlib.import_module(module_path)
-        return (getattr(module, "Command").help or "").strip().split("\n")[0]
+        return (module.Command.help or "").strip().split("\n")[0]
     except Exception:
         return ""
 

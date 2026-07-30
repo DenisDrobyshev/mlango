@@ -1,0 +1,50 @@
+name: Translation
+description: Offer or improve a translation of the documentation.
+title: "docs(i18n): "
+labels: [documentation, i18n]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Translations are welcome one page at a time — there is no need to
+        translate everything before opening a pull request. Untranslated pages
+        fall back to English automatically.
+
+        See [Translating](https://denisdrobyshev.github.io/mlango/translating/)
+        for the file naming and the workflow.
+
+  - type: input
+    id: locale
+    attributes:
+      label: Language
+      description: The IETF locale code and the language name.
+      placeholder: "es — Español"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: pages
+    attributes:
+      label: Pages
+      options:
+        - label: Introduction (index.md)
+        - label: Tutorial (tutorial.md)
+        - label: Concepts (concepts.md)
+        - label: Datasets (datasets.md)
+        - label: Models (models.md)
+        - label: Agents (agents.md)
+        - label: Evaluations (evals.md)
+        - label: Admin (admin.md)
+        - label: Serving (serving.md)
+        - label: Migrations (migrations.md)
+        - label: Command line (cli.md)
+        - label: Settings (settings.md)
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: >-
+        Anything the maintainers should know — terminology choices, whether you
+        are a native speaker, or a question about a term that resists
+        translation.

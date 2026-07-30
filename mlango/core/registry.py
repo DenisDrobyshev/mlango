@@ -199,9 +199,7 @@ class Registry:
         return {
             "apps": sorted(self.app_configs),
             "counts": {kind: len(self._objects.get(kind, {})) for kind in KINDS},
-            "objects": {
-                kind: sorted(self._objects.get(kind, {})) for kind in KINDS
-            },
+            "objects": {kind: sorted(self._objects.get(kind, {})) for kind in KINDS},
         }
 
     def __repr__(self) -> str:

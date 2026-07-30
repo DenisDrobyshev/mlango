@@ -82,13 +82,16 @@ class TestAutodetector:
         assert isinstance(changes["reviews"][0], AlterOptions)
 
     def test_no_changes_produces_nothing(self):
-        assert MigrationAutodetector(state_with(reviews_state()), state_with(reviews_state())).changes() == {}
+        assert (
+            MigrationAutodetector(
+                state_with(reviews_state()), state_with(reviews_state())
+            ).changes()
+            == {}
+        )
 
     def test_a_rename_is_not_guessed(self):
         """Guessing renames would silently change what stored data means."""
-        after = reviews_state(
-            fields=[("id", fields.IntegerField()), ("body", fields.TextField())]
-        )
+        after = reviews_state(fields=[("id", fields.IntegerField()), ("body", fields.TextField())])
         changes = MigrationAutodetector(state_with(reviews_state()), state_with(after)).changes()
         kinds = {type(op) for op in changes["reviews"]}
         assert kinds == {AddField, RemoveField}
@@ -125,15 +128,11 @@ class TestNaming:
         assert MigrationAutodetector.suggest_name([], initial=True) == "initial"
 
     def test_single_create_is_descriptive(self):
-        name = MigrationAutodetector.suggest_name(
-            [CreateObject(name="Reviews", kind="dataset")]
-        )
+        name = MigrationAutodetector.suggest_name([CreateObject(name="Reviews", kind="dataset")])
         assert name == "create_reviews"
 
     def test_single_add_field_is_descriptive(self):
-        name = MigrationAutodetector.suggest_name(
-            [AddField("Reviews", "lang", fields.CharField())]
-        )
+        name = MigrationAutodetector.suggest_name([AddField("Reviews", "lang", fields.CharField())])
         assert name == "reviews_lang"
 
     def test_mixed_operations_fall_back_to_a_timestamp(self):

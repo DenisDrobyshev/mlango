@@ -18,6 +18,7 @@ from mlango.training.run import (
     recent_runs,
     set_global_seed,
 )
+from mlango.training.sweep import SweepResult, Trial, expand_grid, run_sweep, sample_space
 from mlango.training.trainer import Trainer, available_trainers, get_trainer
 
 __all__ = [
@@ -38,4 +39,9 @@ __all__ = [
     "Checkpoint",
     "MetricThreshold",
     "build_callbacks",
+    "run_sweep",
+    "SweepResult",
+    "Trial",
+    "expand_grid",
+    "sample_space",
 ]

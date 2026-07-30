@@ -93,7 +93,9 @@ class SklearnTrainer(Trainer):
         out: dict[str, float] = {}
 
         x_train, y_train = train.xy(target=target or None, features=features)
-        train_report = metric_lib.report_for_task(task, y_train, estimator.predict(_as_matrix(x_train)))
+        train_report = metric_lib.report_for_task(
+            task, y_train, estimator.predict(_as_matrix(x_train))
+        )
         out.update({f"train_{k}": v for k, v in metric_lib.flatten_report(train_report).items()})
 
         if validation is not None:
@@ -107,7 +109,9 @@ class SklearnTrainer(Trainer):
                 # Give EarlyStopping something to monitor for regression too.
                 if "val_mse" in out:
                     out["val_loss"] = out["val_mse"]
-                out.update({k: v for k, v in flattened.items() if k in {"accuracy", "f1_macro", "r2"}})
+                out.update(
+                    {k: v for k, v in flattened.items() if k in {"accuracy", "f1_macro", "r2"}}
+                )
         return out
 
     # -- inference -----------------------------------------------------------
@@ -122,7 +126,9 @@ class SklearnTrainer(Trainer):
         classes = [_python(c) for c in getattr(fitted, "classes_", [])]
         probabilities = fitted.predict_proba(_as_matrix(inputs))
         return [
-            dict(zip(classes, (float(p) for p in row))) if classes else [float(p) for p in row]
+            dict(zip(classes, (float(p) for p in row), strict=True))
+            if classes
+            else [float(p) for p in row]
             for row in probabilities
         ]
 

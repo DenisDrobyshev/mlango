@@ -21,8 +21,7 @@ class Source(abc.ABC):
     """Base class for every data source."""
 
     @abc.abstractmethod
-    def __iter__(self) -> Iterator[dict[str, Any]]:
-        ...
+    def __iter__(self) -> Iterator[dict[str, Any]]: ...
 
     def count(self) -> int | None:
         """Row count when it is cheap to know, else ``None``."""
@@ -55,7 +54,9 @@ class InMemorySource(Source):
 class PythonSource(Source):
     """A callable returning an iterable of records — generated or scraped data."""
 
-    def __init__(self, factory: Callable[[], Iterable[dict[str, Any]]], *, count: int | None = None):
+    def __init__(
+        self, factory: Callable[[], Iterable[dict[str, Any]]], *, count: int | None = None
+    ):
         if not callable(factory):
             raise ImproperlyConfigured("PythonSource expects a callable returning records.")
         self.factory = factory

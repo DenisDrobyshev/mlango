@@ -70,7 +70,9 @@ class TorchTrainer(Trainer):
         raw_targets = [record.get(target) for record in records]
         classes = getattr(target_field, "classes", None)
         if classes:
-            targets = torch.tensor([classes.index(value) for value in raw_targets], dtype=torch.long)
+            targets = torch.tensor(
+                [classes.index(value) for value in raw_targets], dtype=torch.long
+            )
         else:
             targets = torch.tensor([float(value) for value in raw_targets], dtype=torch.float32)
         return torch.from_numpy(matrix), targets
@@ -257,7 +259,7 @@ class TorchTrainer(Trainer):
         with torch.no_grad():
             logits = fitted(encoded.to(device))
             probabilities = torch.softmax(logits, dim=-1).cpu().numpy()
-        return [dict(zip(classes, (float(p) for p in row))) for row in probabilities]
+        return [dict(zip(classes, (float(p) for p in row), strict=True)) for row in probabilities]
 
     # -- persistence ---------------------------------------------------------
 

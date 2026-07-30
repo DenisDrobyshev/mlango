@@ -25,8 +25,13 @@ class Memory(abc.ABC):
     def append(self, session_id: str, messages: list[dict[str, Any]]) -> None:
         """Record new messages at the end of a session."""
 
-    def clear(self, session_id: str) -> None:
-        """Forget a session."""
+    def clear(self, session_id: str) -> None:  # noqa: B027 - optional by design
+        """Forget a session.
+
+        Deliberately concrete and empty: a backend with nothing to forget (a
+        stateless one, or one whose store is owned elsewhere) should not be
+        forced to write a no-op override.
+        """
 
     def describe(self) -> dict[str, Any]:
         return {"type": type(self).__name__}
