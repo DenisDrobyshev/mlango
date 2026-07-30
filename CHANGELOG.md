@@ -4,9 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.1.0 — 2026-07-30
 
-### Added
+First release. mlango applies Django's design philosophy to machine learning,
+analytics and LLM agents: declarative classes, migrations, an auto-generated
+admin, and a `manage.py` that ties it together.
+
+### Highlights
 
 - **`manage.py inspectdata`** — Django's `inspectdb`, for data files. Point it at
   a CSV, TSV, JSONL, JSON or Parquet file and it samples the rows and prints a
@@ -63,62 +67,6 @@ All notable changes to this project are documented here. The format follows
   CI. Generic subsystems that took a bare `type` now name the family they mean
   (`mlango.core.typing`), and declared fields read as values inside your own
   `build()` rather than as `Field` objects, so user projects type-check too.
-
-### Changed
-
-- Coverage is 85% and gated: the floor lives in `pyproject.toml`, so
-  `pytest --cov` enforces the same number locally as on CI.
-- CI additionally runs `pip-audit`, CodeQL and Dependabot, defaults to read-only
-  token permissions, and exposes one aggregate `CI` check to require in branch
-  protection — so a job added later cannot silently stop blocking merges.
-- A management command now accepts settings supplied by `settings.configure()`,
-  not only `MLANGO_SETTINGS_MODULE`. Notebooks and test suites could not run a
-  command at all before this.
-- A missing run, trace or object in the admin answers `404` instead of `200`.
-- **The torch trainer computed the wrong loss for every regression model.** A
-  regression head is almost always `nn.Linear(..., 1)`, giving `(N, 1)` against
-  targets of `(N,)`; `MSELoss` broadcast that into an `(N, N)` matrix, comparing
-  every prediction against every target. The recorded curve looked plausible
-  while the gradients were wrong. Torch only warns about it, so the shapes are
-  now aligned before the loss is taken — a model predicting perfectly scores 0.0
-  rather than 2.0.
-- **The torch trainer wrote into the caller's data at inference.** `predict()`
-  and `predict_proba()` need the target key present to encode a batch, and were
-  filling it in on the dicts they were handed — leaving a fabricated label in
-  rows the caller went on to use, indistinguishable from ground truth. They copy
-  now.
-- Documentation headings that other pages link to now carry explicit anchors. A
-  Cyrillic heading slugifies to a positional anchor (`_3`) that moves whenever a
-  section is added above it, so every cross-language link to one was fragile.
-
-### Fixed
-
-- A configuration mistake in a transformers preset now reports the mistake
-  rather than surfacing as `ModuleNotFoundError: transformers`.
-- **A streaming endpoint no longer breaks the whole OpenAPI schema.** The
-  handler's `StreamingResponse` annotation was unresolvable, so one stream route
-  took `/api/openapi.json` and the docs page down with it.
-- **scikit-learn inference now agrees with training on input shape.** A
-  single-feature model built a 2-D array from a request's dict while training
-  passed raw values, so a text pipeline failed on every served request; with
-  several features the column order followed the payload's own keys rather than
-  the declaration.
-- A mistyped label in an admin URL is a `404` page, not a `500`.
-- The admin's version-promotion redirect no longer assumes the default mount
-  point, so it works when the admin is mounted elsewhere.
-- `get_run()` eager-loads its collections, so reading `run.artifacts` outside
-  the session no longer raises `DetachedInstanceError`.
-- `manage.py test` cannot leave `BASE_DIR` pointing at the sandbox it deleted.
-  The "no tests found" path redirected settings before it failed, poisoning
-  every later command in the same process.
-- Metrics and probabilities read the declared feature order rather than a sorted
-  copy of the request's keys.
-
-## 0.1.0 — 2026-07-30
-
-First release. mlango applies Django's design philosophy to machine learning,
-analytics and LLM agents: declarative classes, migrations, an auto-generated
-admin, and a `manage.py` that ties it together.
 
 ### Core
 
