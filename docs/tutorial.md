@@ -38,7 +38,7 @@ python manage.py check
 
 ## 2. Declare a dataset
 
-Save some data as `data/tickets.jsonl` — one JSON object per line:
+Save some data as `data/tickets.jsonl`, one JSON object per line:
 
 ```json title="data/tickets.jsonl"
 {"id": 1, "subject": "Cannot log in at all", "urgency": "high"}
@@ -47,7 +47,7 @@ Save some data as `data/tickets.jsonl` — one JSON object per line:
 {"id": 4, "subject": "Feature idea for exports", "urgency": "low"}
 ```
 
-Now declare what a record *is*. You could write that by hand — but you have the
+Now declare what a record *is*. You could write that by hand, but you have the
 file already, so let mlango read it and write the first draft:
 
 ```bash
@@ -73,14 +73,14 @@ class Tickets(Dataset):
 
 `inspectdata` samples the file, picks a field type per column, notices that `id`
 is unique and makes it the primary key, and spots `urgency` as the label. Paste
-the output into `tickets/datasets.py` — or pass `--write --app tickets` and skip
+the output into `tickets/datasets.py`, or pass `--write --app tickets` and skip
 the paste.
 
 It is a first draft, not an oracle, and the version above is the draft after one
 edit. From four short rows it proposes `subject = CharField(max_length=32)`,
 because nothing it saw was longer than that; real tickets are prose, so widen it
 to `TextField(max_length=500)`. Anything it guessed at carries a comment saying
-so — which is the point of reading the output rather than trusting it.
+so. That is the point of reading it before you keep it.
 
 Three things follow from those six lines.
 
@@ -111,7 +111,7 @@ python manage.py makemigrations
 python manage.py migrate
 ```
 
-Open `tickets/migrations/0001_initial.py` — it is ordinary, readable Python. Add
+Open `tickets/migrations/0001_initial.py`. It is ordinary, readable Python. Add
 a field later and `makemigrations` writes the diff, so six months from now you
 can tell what a stored dataset version actually meant.
 
@@ -148,8 +148,8 @@ class Urgency(Model):
 ```
 
 !!! warning "Why `features` is explicit"
-    Without it, `id` would be treated as an input. Declaring `features` — or
-    relying on `primary_key` to exclude the id — is what stops a model quietly
+    Without it, `id` would be treated as an input. Declaring `features`, or
+    relying on `primary_key` to exclude the id, is what stops a model quietly
     learning from a row number.
 
 Hyperparameters are **fields**, which means they are validated, defaulted,
@@ -171,7 +171,7 @@ python manage.py runs show <run-id>
 ```
 
 Note `_data_fingerprint` in the parameters. Two runs with the same fingerprint
-saw the same data view — which is what makes a comparison meaningful.
+saw the same data view, and that is what makes a comparison meaningful.
 
 Try it on something it has not seen, without starting a server:
 
@@ -179,8 +179,8 @@ Try it on something it has not seen, without starting a server:
 python manage.py predict tickets.Urgency "the checkout page is down for everyone"
 ```
 
-`predict` loads the registered version — the same artifact the API would
-serve — so what you see here is what production would answer. It also takes
+`predict` loads the registered version, the same artifact the API would serve,
+so what you see here is what production would answer. It also takes
 `--dataset` to score the declared data, or `--file` to score a batch:
 
 ```bash
@@ -266,7 +266,7 @@ class Triage(Agent):
         memory = BufferMemory(k=20)
 ```
 
-The tool's JSON schema comes from the type hints and the docstring — you describe
+The tool's JSON schema comes from the type hints and the docstring, so you describe
 it once.
 
 ```bash
@@ -315,10 +315,10 @@ curl -X POST http://127.0.0.1:8000/api/predict/ \
 
 Open the admin. Without writing a single template you have:
 
-- **Tickets** — the data, with a filter on `urgency` and search over `subject`
-- **Urgency** — every version, its metrics, and one-click promotion
-- **Runs** — history with metric charts, and side-by-side comparison
-- **Traces** — each agent call, step by step
+- **Tickets**: the data, with a filter on `urgency` and search over `subject`
+- **Urgency**: every version, its metrics, and one-click promotion
+- **Runs**: history with metric charts, and side-by-side comparison
+- **Traces**: each agent call, step by step
 
 Customise the presentation when you want to:
 
@@ -337,8 +337,8 @@ class TicketsAdmin(admin.ObjectAdmin):
 
 ## What to read next
 
-- **[Concepts](concepts.md)** — why `_meta` is the contract everything reads
-- **[Datasets](datasets.md)** — the full queryset and versioning story
-- **[Models](models.md)** — trainers, callbacks and the registry
-- **[Agents](agents.md)** — tools, memory, providers and tracing
-- **[Settings](settings.md)** — every knob and its default
+- **[Concepts](concepts.md)** explains why `_meta` is the contract everything reads
+- **[Datasets](datasets.md)** has the full queryset and versioning story
+- **[Models](models.md)** covers trainers, callbacks and the registry
+- **[Agents](agents.md)** covers tools, memory, providers and tracing
+- **[Settings](settings.md)** lists every knob and its default

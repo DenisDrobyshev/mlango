@@ -7,8 +7,8 @@ ML projects have a way of turning into a pile of scripts: one that loads data,
 one that trains, a notebook that produced the number in last quarter's slide
 deck, and a `checkpoints/` directory nobody can map back to a commit.
 
-Web development had exactly this problem. Django solved it — not by shipping a
-better library, but by being a **framework**: a project layout, a settings
+Web development had the same problem, and Django's answer was not a better
+library but a **framework**: a project layout, a settings
 module, declarative classes, migrations, an auto-generated admin, and a
 `manage.py` that ties it together. mlango applies that answer to ML.
 
@@ -17,14 +17,14 @@ versions them, records them, and shows them to you.
 
 Two things make that different from the tools you already have. One class body
 becomes an admin page, a documented API endpoint, a migration and a CLI target
-at once — you wire up none of it. And **agents are a first-class family beside
-models**, sharing one metastore, one admin and one evaluation system, rather
+at once, and you wire up none of it. **Agents are also a first-class family
+beside models**, sharing one metastore, one admin and one evaluation system, rather
 than living in a separate stack.
 
 !!! question "Already using MLflow, Kedro, W&B or LangChain?"
     [**mlango and the alternatives**](comparison.md) says where each of them
-    sits, what genuinely overlaps, and — set out plainly — when mlango is the
-    wrong choice.
+    sits, what actually overlaps, and, set out plainly, when mlango is the wrong
+    choice.
 
 ## Install
 
@@ -53,7 +53,7 @@ python manage.py runserver
 Open <http://127.0.0.1:8000/admin/>.
 
 Unlike a bare scaffold, a fresh mlango project **already contains a working
-example** — a dataset, a trained model with real metrics, an agent with a tool,
+example**: a dataset, a trained model with real metrics, an agent with a tool,
 and an eval suite. The admin has something in it the first time you look, which
 is the difference between "I see how this works" and "now what?".
 
@@ -172,7 +172,7 @@ declarations.
 
 ## Where to go next
 
-- **[Tutorial](tutorial.md)** — build a project end to end
-- **[Concepts](concepts.md)** — how declarations, `_meta` and apps fit together
-- **[Datasets](datasets.md)**, **[Models](models.md)**, **[Agents](agents.md)**, **[Evaluations](evals.md)** — the four building blocks
-- **[Admin](admin.md)** — the interface you did not have to build
+- **[Tutorial](tutorial.md)** builds a project end to end
+- **[Concepts](concepts.md)** covers how declarations, `_meta` and apps fit together
+- **[Datasets](datasets.md)**, **[Models](models.md)**, **[Agents](agents.md)** and **[Evaluations](evals.md)** are the four building blocks
+- **[Admin](admin.md)** is the interface you did not have to build

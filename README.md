@@ -1,6 +1,6 @@
 # mlango
 
-**A batteries-included framework for machine learning, analytics and LLM agents — built on Django's philosophy.**
+**A batteries-included framework for machine learning, analytics and LLM agents, built on Django's philosophy.**
 
 *Read this in [Русский](https://github.com/DenisDrobyshev/mlango/blob/master/README.ru.md).*
 
@@ -15,10 +15,12 @@ pip install "mlango[sklearn]"
 
 ML projects tend to become a pile of scripts: one to load data, one to train, a
 notebook that produced the number in the slide deck, a `checkpoints/` directory
-nobody can map back to a commit. Web development had exactly this problem, and
-Django solved it — not with a better library, but with a **framework**: a
-project layout, a settings module, declarative classes, migrations, an
-auto-generated admin, and a `manage.py` that ties it together.
+nobody can map back to a commit.
+
+Web development had the same problem, and Django's answer was not a better
+library but a **framework**: a project layout, a settings module, declarative
+classes, migrations, an auto-generated admin, and a `manage.py` that ties it
+together.
 
 mlango applies that answer to ML. You declare datasets, models, agents and
 evaluations; the framework runs them, versions them, records them and shows them
@@ -99,8 +101,8 @@ python manage.py runserver
 ```
 
 Open <http://127.0.0.1:8000/admin/>. Unlike a bare scaffold, a fresh mlango
-project **already contains a working example** — a dataset, a trained model with
-real metrics, an agent with a tool, and an eval suite — so the admin has
+project **already contains a working example**: a dataset, a trained model
+with real metrics, an agent with a tool, and an eval suite. The admin has
 something in it the first time you look.
 
 No configuration is required to get there: the metastore is SQLite, artifacts go
@@ -113,8 +115,8 @@ key.
 
 ### Declarative classes with a `_meta`
 
-Four families, one system. Everything generic in the framework — the admin,
-migrations, the CLI, the API — is written against `_meta`, which is why one
+Four families, one system. Everything generic in the framework (the admin,
+migrations, the CLI, the API) is written against `_meta`. That is why a single
 admin renders all four.
 
 | You declare | You get |
@@ -135,10 +137,11 @@ for batch in train.batch(32):
     ...
 ```
 
-Lookups follow Django's spelling — `filter(stars__gte=4)`, `exclude(text__icontains="spam")`,
-`filter(language__in=["en", "de"])`. Splits are assigned by hashing each
-record's key, so **adding rows never moves existing ones between train and
-test** — the property that makes a held-out set trustworthy six months later.
+Lookups follow Django's spelling: `filter(stars__gte=4)`,
+`exclude(text__icontains="spam")`, `filter(language__in=["en", "de"])`. Splits
+are assigned by hashing each record's key, so **adding rows never moves existing
+ones between train and test**. That property is what keeps a held-out set
+trustworthy six months later.
 
 ### Migrations for schemas
 
@@ -152,7 +155,7 @@ migrations use `RunPython`, exactly as you would expect.
 
 ### An admin you did not build
 
-Every declared object appears automatically — no registration required.
+Every declared object appears automatically, with no registration required.
 Register only to change how it looks:
 
 ```python
@@ -167,6 +170,13 @@ The admin shows data previews with filters and search, run history with metric
 charts, side-by-side run comparison, dataset and model versions with one-click
 promotion, and a step-by-step trace viewer for every agent call. It is
 server-rendered with no build step and no CDN.
+
+![The mlango admin: everything a project declares, and everything it has run](docs/assets/admin-overview.png)
+
+Every run keeps its environment, parameters, metrics and artifacts, so a number
+from six months ago still says where it came from:
+
+![A run page: environment, parameters, metrics and artifacts](docs/assets/admin-run.png)
 
 ### Agents as declarations
 
@@ -242,7 +252,7 @@ and primary key already filled in, so your first declaration is an edit rather
 than a blank page.
 
 Apps can ship their own commands in `<app>/management/commands/`, and they
-appear in `manage.py help` automatically — including overriding a built-in.
+appear in `manage.py help` automatically, including ones that override a built-in.
 
 ---
 
@@ -267,12 +277,12 @@ SERVE_MIDDLEWARE = ["mlango.serve.middleware.ApiKeyMiddleware", ...]
 A library is something you call. A framework calls you. That inversion is the
 whole point, and it is what buys the conveniences above:
 
-- **Project layout and settings** — `manage.py`, `MLANGO_SETTINGS_MODULE`
-- **An app registry** — autodiscovers `datasets.py`, `models.py`, `agents.py`, `evals.py`, `admin.py`
-- **Migrations** — generated, reviewable files for declared schemas
+- **Project layout and settings**: `manage.py`, `MLANGO_SETTINGS_MODULE`
+- **An app registry** that autodiscovers `datasets.py`, `models.py`, `agents.py`, `evals.py`, `admin.py`
+- **Migrations**: generated, reviewable files for declared schemas
 - **An admin generated from declarations**
 - **A management command system** apps can extend and override
-- **Signals** — `run_finished`, `epoch_finished`, `tool_called`, and more
+- **Signals**: `run_finished`, `epoch_finished`, `tool_called`, and more
 - **Pluggable backends** behind settings
 
 If mlango were a library you would still be writing the run loop, the tracking
@@ -287,14 +297,14 @@ Full docs, including a tutorial that builds a project end to end:
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](https://github.com/DenisDrobyshev/mlango/blob/master/CONTRIBUTING.md) for the
+Contributions are welcome. See [CONTRIBUTING.md](https://github.com/DenisDrobyshev/mlango/blob/master/CONTRIBUTING.md) for the
 development setup, and [CODE_OF_CONDUCT.md](https://github.com/DenisDrobyshev/mlango/blob/master/CODE_OF_CONDUCT.md) for community
 expectations. Good first issues are labelled
 [`good first issue`](https://github.com/DenisDrobyshev/mlango/labels/good%20first%20issue).
 
 ## License
 
-MIT — see [LICENSE](https://github.com/DenisDrobyshev/mlango/blob/master/LICENSE).
+MIT. See [LICENSE](https://github.com/DenisDrobyshev/mlango/blob/master/LICENSE).
 
 mlango is not affiliated with or endorsed by the Django Software Foundation. It
 borrows Django's design philosophy, gratefully.

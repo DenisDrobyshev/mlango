@@ -1,14 +1,44 @@
 # Admin
 
 The admin is generated from your declarations. There is no build step, no CDN and
-no JavaScript framework — it is server-rendered Jinja2 with inline SVG charts, so
-it works on a fresh `pip install` and offline.
+no JavaScript framework: server-rendered Jinja2 with inline SVG charts, so it
+works on a fresh `pip install` and offline.
 
 ```bash
 python manage.py runserver
 ```
 
 Then open <http://127.0.0.1:8000/admin/>.
+
+![The overview: counts per family, recent runs, recent agent traces, latest versions](assets/admin-overview.png)
+
+Every screenshot on this page is the demo project a fresh `mlango startproject`
+gives you, with nothing configured.
+
+## What each page shows
+
+=== "A run"
+    Environment, parameters, metrics, artifacts and per-case evaluation results.
+    The metric charts are inline SVG, so nothing is fetched to draw them.
+
+    ![A run page](assets/admin-run.png)
+
+=== "A dataset"
+    A live preview of the declared source, with the filters and search derived
+    from the field types, alongside the schema and materialised versions.
+
+    ![A dataset page](assets/admin-dataset.png)
+
+=== "An agent trace"
+    Every step of a tool-use loop: what the model said, which tool it called,
+    what came back, and how long each span took.
+
+    ![A trace page](assets/admin-trace.png)
+
+=== "Comparing runs"
+    Two or more runs side by side, with the parameters and metrics that differ.
+
+    ![Run comparison](assets/admin-compare.png)
 
 ## Everything appears by default
 
