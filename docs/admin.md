@@ -166,7 +166,7 @@ family:
 | Family | Also shows |
 |---|---|
 | Dataset | A data preview with filters, search and pagination, plus materialised versions |
-| Model | Registered versions with metrics and one-click promotion, plus its runs |
+| Model | Registered versions with metrics and one-click promotion, its runs, and a feature-importance chart |
 | Agent | Recent traces with steps, tokens and status |
 | Eval | Recent runs with pass rates |
 

@@ -161,8 +161,10 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
         if entry.kind == "dataset":
             context.update(_dataset_page(entry, q, filters, page_no, period))
         elif entry.kind == "model":
-            context["versions"] = _model_versions(label=label)
+            versions = _model_versions(label=label)
+            context["versions"] = versions
             context["runs"] = _runs_for(label)
+            context["importances"] = _importance_bars(versions)
         elif entry.kind == "agent":
             from mlango.agents.tracing import recent_traces
 
@@ -382,6 +384,40 @@ def _model_versions(*, label: str | None = None, limit: int = 50) -> list[Any]:
         if label:
             statement = statement.where(ModelVersion.label == label)
         return list(session.execute(statement).scalars())
+
+
+def _importance_bars(versions: list[Any], limit: int = 20) -> dict[str, Any] | None:
+    """Feature weights of the newest version that recorded any, as bar widths.
+
+    Newest rather than promoted: this is a debugging view, and the version
+    someone is looking at right after training is the one they have questions
+    about. Which version it came from is shown, so there is no guessing.
+    """
+    version = next((v for v in versions if v.importances), None)
+    if version is None:
+        return None
+
+    weights = {str(k): float(v) for k, v in version.importances.items()}
+    ranked = sorted(weights.items(), key=lambda pair: -abs(pair[1]))[:limit]
+    largest = max((abs(value) for _, value in ranked), default=0.0)
+    return {
+        "version": version.version,
+        "total": len(weights),
+        # Tree importances are all positive and need no legend; linear
+        # coefficients carry a direction, and a chart of magnitudes alone would
+        # show "means negative" as agreement.
+        "signed": any(value < 0 for _, value in ranked),
+        "rows": [
+            {
+                "name": name,
+                "value": value,
+                # A zero-weight feature would divide by zero and, more to the
+                # point, a chart of nothing but zeroes should read as empty.
+                "width": (abs(value) / largest * 100) if largest else 0.0,
+            }
+            for name, value in ranked
+        ],
+    }
 
 
 def _dataset_versions(*, label: str | None = None, limit: int = 50) -> list[Any]:

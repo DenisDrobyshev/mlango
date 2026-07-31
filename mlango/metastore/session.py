@@ -7,6 +7,7 @@ reconfiguring settings.
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -16,6 +17,8 @@ from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from mlango.metastore.models import Base
+
+logger = logging.getLogger("mlango.metastore")
 
 _engines: dict[str, Engine] = {}
 _sessionmakers: dict[str, sessionmaker[Session]] = {}
@@ -84,11 +87,15 @@ def ensure_schema(url: str | None = None) -> None:
     request, so there is nothing to be gained by making people run ``migrate``
     before their first ``materialize()``. Declarative migrations are a separate
     concern and still explicit.
+
+    They do change shape when mlango itself is upgraded, which is why
+    :func:`align_schema` runs here too.
     """
     url = url or metastore_url()
     if url in _ensured:
         return
     create_all(url)
+    align_schema(url)
     _ensured.add(url)
 
 
@@ -115,6 +122,83 @@ def session_scope(url: str | None = None) -> Iterator[Session]:
 def create_all(url: str | None = None) -> None:
     """Create every metastore table that does not exist yet."""
     Base.metadata.create_all(get_engine(url))
+
+
+def align_schema(url: str | None = None) -> list[str]:
+    """Add columns a newer mlango declares that an existing database lacks.
+
+    ``create_all`` creates missing *tables* and ignores missing *columns*, so
+    upgrading mlango against a metastore written by an older version failed at
+    the first query with ``no such column``. The choice then was to delete the
+    database — throwing away every run, metric and registered version — for a
+    column that was only ever appended.
+
+    Only additive changes are handled. Anything narrower — a rename, a type
+    change, a dropped column — is a real migration and stays out of an implicit
+    startup path. Returns the ``table.column`` names that were added, so
+    ``check`` can report them.
+    """
+    from sqlalchemy import inspect, text
+
+    engine = get_engine(url)
+    inspector = inspect(engine)
+    present = set(inspector.get_table_names())
+    added: list[str] = []
+
+    with engine.begin() as connection:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in present:
+                continue
+            known = {column["name"] for column in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name in known:
+                    continue
+                clause = _add_column_clause(column, engine.dialect)
+                if clause is None:
+                    logger.warning(
+                        "Metastore column %s.%s is missing and cannot be added "
+                        "automatically: it is NOT NULL and its default is computed "
+                        "per row, so existing rows have no value to take. Migrate "
+                        "it by hand, or recreate the metastore.",
+                        table.name,
+                        column.name,
+                    )
+                    continue
+                connection.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {clause}"))
+                added.append(f"{table.name}.{column.name}")
+
+    if added:
+        logger.info("Metastore schema aligned: added %s", ", ".join(added))
+    return added
+
+
+def _add_column_clause(column: Any, dialect: Any) -> str | None:
+    """The ``ADD COLUMN`` body for a new column, or None if it cannot be added.
+
+    A NOT NULL column needs a value for the rows that already exist. A constant
+    default supplies one — that is what a hand-written migration would do — and
+    both SQLite and Postgres accept it in a single statement. A default that is
+    computed per row (``utcnow``, ``dict``) has no single value to backfill
+    with, so it is refused rather than guessed at.
+    """
+    from sqlalchemy import literal
+
+    body = f'"{column.name}" {column.type.compile(dialect)}'
+    if column.nullable:
+        return body
+
+    default = column.server_default
+    if default is not None:
+        return f"{body} NOT NULL DEFAULT {default.arg.text if hasattr(default.arg, 'text') else default.arg}"
+
+    default = column.default
+    if default is None or default.is_callable or default.is_clause_element:
+        return None
+
+    rendered = literal(default.arg, column.type).compile(
+        dialect=dialect, compile_kwargs={"literal_binds": True}
+    )
+    return f"{body} NOT NULL DEFAULT {rendered}"
 
 
 def drop_all(url: str | None = None) -> None:

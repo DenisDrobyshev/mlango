@@ -17,6 +17,11 @@ from mlango.core.signals import epoch_finished, epoch_started
 from mlango.training import metrics as metric_lib
 from mlango.training.trainer import Trainer
 
+#: A text pipeline has tens of thousands of features and nobody reads past the
+#: first page. Storing the whole vector would put a megabyte of noise in every
+#: version row for a list that is only ever skimmed.
+TOP_FEATURES = 40
+
 
 def _as_matrix(inputs: list[Any], features: list[str] | None = None) -> Any:
     """Normalise records into something an estimator accepts.
@@ -239,6 +244,65 @@ class SklearnTrainer(Trainer):
         if classes is not None:
             info["n_classes"] = int(len(classes))
         return info
+
+    def importances(self, model, fitted) -> dict[str, float] | None:
+        """Whatever the fitted estimator exposes, paired with real column names.
+
+        Trees publish ``feature_importances_`` and linear models publish
+        ``coef_``; both are anonymous vectors. The names come from the last
+        transformer that can produce them — which is what turns a
+        ``TfidfVectorizer`` pipeline from 40,000 numbered slots into the words
+        the model actually keyed on — and from the declared fields otherwise.
+        """
+        estimator, names = _explainable(fitted)
+        weights = getattr(estimator, "feature_importances_", None)
+        if weights is None:
+            coefficients = getattr(estimator, "coef_", None)
+            if coefficients is None:
+                return None
+            matrix = np.asarray(coefficients, dtype=float)
+            if matrix.ndim > 1 and matrix.shape[0] > 1:
+                # One row per class. There is no signed answer to give — a
+                # feature that argues for one class argues against another — so
+                # report magnitude, which answers "does this matter at all".
+                weights = np.abs(matrix).mean(axis=0)
+            else:
+                # Binary or regression: one row, and its sign is the direction
+                # of the effect. Keeping it is the difference between "this word
+                # matters" and "this word means negative".
+                weights = matrix.ravel()
+
+        values = np.asarray(weights, dtype=float).ravel()
+        if not values.size:
+            return None
+        if names is None or len(names) != values.size:
+            declared = _features_of(model) or []
+            names = (
+                list(declared)
+                if len(declared) == values.size
+                else [f"feature_{i}" for i in range(values.size)]
+            )
+
+        ranked = sorted(zip(names, values, strict=True), key=lambda pair: -abs(pair[1]))
+        return {str(name): float(value) for name, value in ranked[:TOP_FEATURES]}
+
+
+def _explainable(fitted: Any) -> tuple[Any, list[str] | None]:
+    """The estimator that holds the weights, and names for its columns."""
+    steps = getattr(fitted, "steps", None)
+    if not steps:
+        return fitted, None
+
+    estimator = steps[-1][1]
+    for _, step in reversed(steps[:-1]):
+        get_names = getattr(step, "get_feature_names_out", None)
+        if not callable(get_names):
+            continue
+        try:
+            return estimator, [str(name) for name in get_names()]
+        except Exception:  # noqa: BLE001 - unfitted or nameless, try the next one
+            continue
+    return estimator, None
 
 
 def _python(value: Any) -> Any:

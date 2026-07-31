@@ -145,6 +145,50 @@ feature the model needs, the command says which column is absent and what the
 data does have — rather than letting the trainer fail somewhere deep inside a
 vectoriser.
 
+### Explaining a version
+
+Which features a trained version actually leaned on. The weights are recorded on
+the version row when it is registered, so this reads the metastore and never
+loads the artifact:
+
+```bash
+python manage.py explain reviews.Sentiment
+python manage.py explain reviews.Sentiment --stage production -n 10
+python manage.py explain reviews.Sentiment --json
+```
+
+```
+reviews.Sentiment@v4
+top 10 of 40, largest weight first
+
+delightful   ████████████████████████████████  2.4439
+dull         ████████████████████████████···· -2.1614
+brilliant    ███████████████████████████·····  2.0495
+boring       ███████████████████████████····· -2.0407
+badly        ██████████████████████████······ -1.9794
+beautifully  ██████████████████████████······  1.9708
+awful        █████████████████████████······· -1.8902
+excellent    █████████████████████████·······  1.8844
+waste        ███████████████████············· -1.4853
+every        ███████████████████·············  1.4288
+```
+
+A pipeline's vectoriser names its own columns, which is what turns 40,000
+numbered slots into the words above. The sign is the direction of the effect —
+kept for binary and regression fits, where it means something, and dropped for
+multiclass, where a feature arguing for one class argues against another.
+
+| Flag | Effect |
+|---|---|
+| `--version N` / `--stage NAME` | Which version to explain (default: newest) |
+| `-n N` | How many features to show |
+| `--json` | Emit the weights instead of a chart |
+| `--recompute` | Load the artifact, re-derive the weights and store them |
+
+`--recompute` is the escape hatch for a version registered before mlango knew
+how to explain it. Backends that cannot name a feature — the neural ones —
+report nothing rather than inventing a plausible list.
+
 ### Evaluation
 
 ```bash

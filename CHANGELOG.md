@@ -6,7 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **Deployment is scaffolded, not improvised.** `startproject` now writes
+  `asgi.py`, a `Dockerfile`, a `.dockerignore` and a `compose.yaml`, and
+  `mlango.serve` exports `create_app`. The generated `settings.py` reads
+  `MLANGO_SECRET_KEY`, `MLANGO_DEBUG` and `DATABASE_URL` from the environment, so
+  a container changes what it must without editing a file.
+- **Feature importance.** Registering a version records what the fit weighted, so
+  `manage.py explain <model>` and the admin's model page can answer "why did it
+  say that" without loading the artifact. Trainers opt in with one method,
+  `importances()`; the sklearn backend names a pipeline's columns from its
+  vectoriser, so a text model reports words rather than indices. Backends that
+  cannot name a feature report nothing rather than inventing a list.
+
 ### Fixed
+
+- **Upgrading mlango no longer means deleting the metastore.** `create_all`
+  creates missing tables and ignores missing columns, so a database written by an
+  older release failed at the first query with `no such column`. Additive columns
+  are now applied on connect, with their declared default so existing rows stay
+  valid.
 
 - **A UTF-8 file with a byte-order mark no longer fails to parse.** Excel,
   Notepad and PowerShell all write a BOM by default, so data exported on Windows

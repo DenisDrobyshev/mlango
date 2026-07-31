@@ -540,6 +540,45 @@ class TestPagesWithData:
         assert "Registered versions" in text
         assert "v1" in text
 
+    def test_a_model_page_charts_feature_importance(self, populated):
+        client, _run, _result, sentiment, _reviews = populated
+        text = client.get(f"/o/{sentiment._meta.label}").text
+        assert "Feature importance" in text
+        assert "What v1 weighted most heavily" in text
+        assert 'class="importances"' in text
+        assert "width: " in text
+
+    def test_bar_widths_are_relative_to_the_largest_weight(self, populated):
+        from mlango.admin.app import _importance_bars
+
+        class Version:
+            version = 1
+            importances = {"a": 2.0, "b": -1.0, "c": 0.0}
+
+        bars = _importance_bars([Version()])
+        assert bars["version"] == 1
+        assert [row["name"] for row in bars["rows"]] == ["a", "b", "c"]
+        assert [round(row["width"]) for row in bars["rows"]] == [100, 50, 0]
+        assert bars["signed"], "a negative weight needs the legend"
+
+    def test_positive_only_weights_need_no_legend(self):
+        from mlango.admin.app import _importance_bars
+
+        class Version:
+            version = 3
+            importances = {"a": 0.6, "b": 0.4}
+
+        assert _importance_bars([Version()])["signed"] is False
+
+    def test_a_model_with_no_weights_shows_no_chart(self, populated):
+        from mlango.admin.app import _importance_bars
+
+        class Version:
+            version = 1
+            importances = None
+
+        assert _importance_bars([Version()]) is None
+
     def test_a_dataset_page_lists_materialised_versions(self, populated):
         client, _run, _result, _sentiment, reviews = populated
         text = client.get(f"/o/{reviews._meta.label}").text

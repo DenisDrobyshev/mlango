@@ -81,6 +81,16 @@ class Trainer(abc.ABC):
         """Backend-specific detail shown in the admin."""
         return {"backend": self.name}
 
+    def importances(self, model: Any, fitted: Any) -> dict[str, float] | None:
+        """Feature weights, largest first, when the backend can name them.
+
+        Returning ``None`` is the honest answer for a backend whose weights do
+        not map onto anything a person would recognise as a feature — which is
+        most neural networks. A wrong explanation is worse than none, so no
+        backend is asked to invent one.
+        """
+        return None
+
     def resolve_device(self) -> str:
         from mlango.conf import settings
 

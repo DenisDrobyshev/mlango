@@ -176,6 +176,24 @@
   </div>
   {% else %}<p class="empty">Not trained yet.</p>{% endif %}
 </div>
+
+{% if importances %}
+<div class="card">
+  <h2>Feature importance</h2>
+  <p class="subtitle">What v{{ importances.version }} weighted most heavily{% if importances.total > importances.rows | length %} — top {{ importances.rows | length }} of {{ importances.total }}{% endif %}.{% if importances.signed %} A hollow bar is a weight that argues the other way.{% endif %}</p>
+  <table class="importances">
+    <tbody>
+      {% for row in importances.rows %}
+      <tr>
+        <th scope="row" class="mono">{{ row.name | short(48) }}</th>
+        <td class="weight"><span class="bar{% if row.value < 0 %} against{% endif %}" style="width: {{ '%.1f' | format(row.width) }}%"></span></td>
+        <td class="num mono">{{ row.value | number }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 {% endif %}
 
 {% if opts.kind in ('model', 'eval') %}

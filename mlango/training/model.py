@@ -309,6 +309,7 @@ class Model(Declarative):
                 path=path,
                 params=_jsonable(params),
                 metrics=_jsonable(summary),
+                importances=_importances(self, trainer),
                 stage=Stage.NONE,
             )
             session.add(version)
@@ -507,6 +508,22 @@ class Model(Declarative):
             "hyperparameters": {f.name: f.get_default() for f in cls._meta.fields},
             "tunable": [f.name for f in cls._meta.tunable_fields],
         }
+
+
+def _importances(model: Model, trainer: Trainer) -> dict[str, float] | None:
+    """Ask the backend to explain the fit, and never let the answer break it.
+
+    Explanations are a read of the fitted object, so a backend that raises here
+    — an estimator whose weights are not where the attribute names suggest, a
+    vectoriser that was never fitted — has failed at describing a run that
+    otherwise succeeded. Losing the chart is acceptable. Losing the trained
+    model because the chart raised is not.
+    """
+    try:
+        return trainer.importances(model, model._fitted)
+    except Exception:  # noqa: BLE001 - see above
+        logger.debug("Could not extract importances for %s", type(model)._meta.label, exc_info=True)
+        return None
 
 
 __all__ = ["Model"]

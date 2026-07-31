@@ -145,6 +145,11 @@ class ModelVersion(Base):
     path: Mapped[str | None] = mapped_column(Text, nullable=True)
     params: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    #: Feature weights, largest first, as the backend reported them at fit time.
+    #: Kept on the row rather than recomputed, so explaining a version never
+    #: means loading its weights — and an artifact that has been deleted can
+    #: still say what it was paying attention to.
+    importances: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     stage: Mapped[str] = mapped_column(String(32), default=Stage.NONE)
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, index=True)

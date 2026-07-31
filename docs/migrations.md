@@ -142,6 +142,14 @@ declarative migrations.
 That split is deliberate: bookkeeping tables should never be something a
 newcomer has to think about, while *their* schema history should be explicit.
 
+Upgrading mlango is handled in the same place. When a release adds a column to a
+metastore table, the next connection adds it to your database — with the
+declared default, so rows written by the old version keep working. Only additive
+changes qualify; a rename or a type change would be a real migration, and one
+that silently rewrote your run history at import time would be a bad idea. If a
+new column cannot be filled in safely, the log says which one and leaves the
+database alone rather than guessing.
+
 ## Ordering and dependencies
 
 Within an app, the numeric prefix is the order. Across apps, declare it:

@@ -11,6 +11,7 @@ mis-wired settings module would go unnoticed.
 
 from __future__ import annotations
 
+import json
 import sys
 
 import pytest
@@ -665,6 +666,79 @@ class TestPredict:
     def test_file_and_dataset_together(self, live_trained, capsys):
         assert run("predict", "demo.Sentiment", "--file", "score.jsonl", "--dataset") == 1
         assert "not both" in capsys.readouterr().err
+
+
+class TestExplain:
+    def test_the_default_is_the_newest_version(self, live_trained, capsys):
+        assert run("explain", "demo.Sentiment") == 0
+        out = capsys.readouterr().out
+        assert "demo.Sentiment@v" in out
+        assert "largest weight first" in out
+        assert "█" in out, "the chart should draw bars"
+
+    def test_it_names_words_from_the_vectoriser(self, live_trained, capsys):
+        assert run("explain", "demo.Sentiment", "--json") == 0
+        weights = json.loads(capsys.readouterr().out)
+        assert weights
+        assert all(isinstance(value, float) for value in weights.values())
+        assert not any(name.startswith("feature_") for name in weights)
+
+    def test_top_limits_the_rows(self, live_trained, capsys):
+        assert run("explain", "demo.Sentiment", "--json", "-n", "3") == 0
+        assert len(json.loads(capsys.readouterr().out)) == 3
+
+    def test_it_reads_the_metastore_rather_than_the_artifact(self, live_trained, capsys):
+        """No load means explaining stays cheap and works without the weights."""
+        from mlango.training.trainer import get_trainer
+
+        trainer = get_trainer("sklearn")
+
+        def refuse(model, path):
+            raise AssertionError("explain must not load the artifact by default")
+
+        original, trainer.load = trainer.load, refuse
+        try:
+            assert run("explain", "demo.Sentiment") == 0
+        finally:
+            trainer.load = original
+
+    def test_recompute_falls_back_to_the_artifact(self, live_trained, capsys):
+        """A version registered before the column existed can still be filled in."""
+        import sqlalchemy as sa
+
+        from mlango.metastore.models import ModelVersion
+        from mlango.metastore.session import session_scope
+
+        with session_scope() as session:
+            row = session.execute(
+                sa.select(ModelVersion)
+                .where(ModelVersion.label == "demo.Sentiment")
+                .order_by(ModelVersion.version.desc())
+                .limit(1)
+            ).scalar_one()
+            row.importances = None
+            version = row.version
+
+        assert run("explain", "demo.Sentiment") == 0
+        assert "demo.Sentiment@v" in capsys.readouterr().out
+
+        with session_scope() as session:
+            restored = session.execute(
+                sa.select(ModelVersion).where(
+                    ModelVersion.label == "demo.Sentiment", ModelVersion.version == version
+                )
+            ).scalar_one()
+            assert restored.importances, "the recomputed weights should be stored"
+
+    def test_an_unknown_version_says_which_one(self, live_trained, capsys):
+        assert run("explain", "demo.Sentiment", "--version", "999") == 1
+        assert "v999" in capsys.readouterr().err
+
+    def test_a_stage_with_no_version_points_at_train(self, live_trained, capsys):
+        assert run("explain", "demo.Sentiment", "--stage", "nowhere") == 1
+        err = capsys.readouterr().err
+        assert "stage 'nowhere'" in err
+        assert "manage.py train demo.Sentiment" in err
 
 
 class TestTestCommand:

@@ -286,3 +286,62 @@ class TestMetrics:
     def test_empty_input_does_not_crash(self):
         assert metrics.accuracy([], []) == 0.0
         assert metrics.mse([], []) == 0.0
+
+
+class TestImportances:
+    def test_a_text_pipeline_names_words_not_column_numbers(self, project, sentiment):
+        """The whole point: a vectoriser's columns get their real names back."""
+        model = sentiment.fit()
+        weights = model._version.importances
+
+        assert weights, "the sklearn backend should have reported weights"
+        assert any(word in weights for word in ("great", "terrible", "movie"))
+        assert not any(name.startswith("feature_") for name in weights)
+
+    def test_the_sign_of_a_binary_coefficient_survives(self, project, sentiment):
+        """Direction is the difference between 'matters' and 'means negative'."""
+        weights = sentiment.fit()._version.importances
+        assert min(weights.values()) < 0 < max(weights.values())
+
+    def test_the_stored_list_is_capped(self, project, sentiment):
+        from mlango.training.backends.sklearn_backend import TOP_FEATURES
+
+        weights = sentiment.fit(max_features=500)._version.importances
+        assert 0 < len(weights) <= TOP_FEATURES
+
+    def test_declared_columns_name_themselves(self, project, reviews, isolated_registry):
+        """No vectoriser in the pipeline, so the names come from the fields."""
+        pytest.importorskip("sklearn")
+
+        class Stars(Model):
+            class Meta:
+                dataset = reviews
+                trainer = "sklearn"
+                task = "regression"
+                features = ["id", "stars"]
+                target = "stars"
+
+            def build(self):
+                from sklearn.linear_model import LinearRegression
+
+                return LinearRegression()
+
+        assert set(Stars.fit()._version.importances) == {"id", "stars"}
+
+    def test_a_backend_that_cannot_explain_says_so(self):
+        from mlango.training.trainer import Trainer
+
+        assert Trainer.importances(object(), None, None) is None
+
+    def test_a_raising_backend_does_not_lose_the_run(self, project, sentiment, monkeypatch):
+        """An explanation is a nice-to-have; the trained model is not."""
+        from mlango.training.backends.sklearn_backend import SklearnTrainer
+
+        def boom(self, model, fitted):
+            raise RuntimeError("estimator has no idea")
+
+        monkeypatch.setattr(SklearnTrainer, "importances", boom)
+
+        model = sentiment.fit()
+        assert model._version.version >= 1
+        assert model._version.importances is None

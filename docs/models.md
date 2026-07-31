@@ -127,6 +127,39 @@ Sentiment.promote(3, "production")         # demotes the incumbent to archived
 Stages are `none`, `staging`, `production`, `archived`. Promotion is one click in
 the admin, or one call here.
 
+## Feature importance
+
+Registration also records what the fit weighted, so a version can explain itself
+without being loaded:
+
+```python
+Sentiment.load(version=3)._version.importances
+# {'delightful': 2.44, 'dull': -2.16, 'brilliant': 2.05, ...}
+```
+
+```bash
+python manage.py explain reviews.Sentiment
+```
+
+The model page in the admin charts the same numbers. Where the names come from
+depends on the pipeline: a vectoriser is asked for its own
+`get_feature_names_out()`, so a text model reports words rather than column
+indices, and everything else falls back to the declared fields.
+
+Backends opt in by implementing one method:
+
+```python
+class LightGBMTrainer(Trainer):
+    def importances(self, model, fitted):
+        names = model.get_features()
+        return dict(zip(names, fitted.feature_importance(), strict=True))
+```
+
+Returning `None` — the default — is the right answer for a backend whose weights
+do not correspond to anything a person would recognise as a feature, which is
+most neural networks. A wrong explanation is worse than none, so no backend is
+asked to invent one.
+
 ## Sweeps
 
 Fields marked `tunable` define a default space:
