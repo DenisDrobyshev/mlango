@@ -196,6 +196,62 @@ multiclass, where a feature arguing for one class argues against another.
 how to explain it. Backends that cannot name a feature — the neural ones —
 report nothing rather than inventing a plausible list.
 
+### Diffing two versions
+
+Aggregate metrics answer "is the new one better" and hide the answer you are
+afraid of: a version two points more accurate overall can still have broken
+forty rows that used to work. This scores both on the same data and diffs the
+answers.
+
+```bash
+python manage.py diff reviews.Sentiment 3 4
+python manage.py diff reviews.Sentiment                      # production vs newest
+python manage.py diff reviews.Sentiment 3 4 --show-changes 20
+python manage.py diff reviews.Sentiment 3 4 --fail-on-regression
+```
+
+```
+reviews.Sentiment v3 → v4 on 500 rows of reviews.Reviews
+
+  agreement      94.2%
+  changed        29 row(s)
+    neg → pos                18
+    pos → neg                11
+
+Against the labels
+  v3 accuracy      0.8840
+  v4 accuracy      0.9020   +0.0180
+  fixed          22 row(s) wrong in v3
+  broke           4 row(s) right in v3
+```
+
+**`broke`** is the number nobody reports and everybody wants. A promotion that
+improves the average while losing rows that used to work is the kind that gets
+reverted a week later, and `--fail-on-regression` turns it into an exit code you
+can put in front of a promotion.
+
+With no version numbers it compares what is in production against the newest —
+which is the question you have when you are about to promote something.
+
+| Flag | Effect |
+|---|---|
+| `--dataset LABEL` | Score a different dataset, e.g. a held-out set |
+| `-n N` | Stop after N rows |
+| `--show-changes N` | Print up to N rows where the two disagree |
+| `--json` | Emit the whole report |
+| `--fail-on-regression` | Exit non-zero if the newer one lost a row the older one got right |
+
+Regression models are compared by distance rather than equality — two float
+predictions are never equal — so the report gives mean and largest delta, and
+counts rows that got closer to the truth against rows that got further away.
+
+Unlabelled data still works: the report then says what changed, and does not
+pretend to say what improved.
+
+This one is not in the admin, and that is deliberate: it loads two models and
+scores a dataset, which belongs behind a command you chose to run rather than a
+page that loads when you click a link.
+
 ### Watching for drift
 
 Whether the input has moved away from what a version was trained on. Reads the

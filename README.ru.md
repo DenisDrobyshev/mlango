@@ -231,6 +231,7 @@ python manage.py train reviews.Sentiment -p C=2.0 --tag baseline
 python manage.py predict reviews.Sentiment "понравилось от начала до конца"
 python manage.py explain reviews.Sentiment       # на что опиралась модель
 python manage.py drift reviews.Sentiment --since 24h  # сдвинулся ли вход?
+python manage.py diff reviews.Sentiment 3 4          # что сломала v4?
 python manage.py sweep reviews.Sentiment -p C=0.25,1,4 --promote-best production
 python manage.py runs list
 python manage.py runs compare 7c8f1020 c089b7e6

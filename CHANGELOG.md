@@ -48,6 +48,16 @@ All notable changes to this project are documented here. The format follows
   extension should not require inventing somewhere to write it. New docs page:
   Extending mlango, plus `GOVERNANCE.md` on what belongs in the framework and
   what belongs in a package.
+- **`manage.py diff`** — what two registered versions actually predict on the
+  same data. Aggregate metrics answer "is the new one better" and hide the
+  answer people are afraid of: a version two points more accurate overall can
+  still have broken forty rows that used to work. The report counts `fixed` and
+  `broke` separately, lists the rows where the two disagree, and
+  `--fail-on-regression` turns "it lost a row that used to work" into an exit
+  code you can put in front of a promotion. With no version numbers it compares
+  production against the newest. Regression models are compared by distance
+  rather than equality; unlabelled data still reports what changed without
+  pretending to say what improved.
 
 ### Fixed
 

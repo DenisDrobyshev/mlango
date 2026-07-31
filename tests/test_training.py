@@ -455,3 +455,157 @@ class TestPredictionLog:
         baseline = {"text": model._version.baseline["text"]}
         scores = drift.compare(baseline, [row.inputs for row in self._logged()])
         assert scores["text"]["verdict"] == "significant"
+
+
+class TestComparison:
+    """Diffing two registered versions — the question before a promotion."""
+
+    @pytest.fixture
+    def two_versions(self, project, sentiment):
+        """A weak version and a strong one, so the diff has something to find.
+
+        A one-word vocabulary is the reliable way to make the first one bad:
+        the only term frequent enough to survive is shared by both classes, so
+        it has nothing to separate them with.
+        """
+        sentiment.fit(max_features=1, C=0.01)
+        sentiment.fit(max_features=5000, C=8.0)
+        return 1, 2
+
+    def test_it_reports_agreement_and_what_moved(self, two_versions, sentiment):
+        from mlango.training.comparison import compare_versions
+
+        left, right = two_versions
+        report = compare_versions(sentiment, left, right)
+
+        assert report["rows"] > 0
+        assert 0.0 <= report["agreement"] <= 1.0
+        assert report["changed"] == report["rows"] - round(report["agreement"] * report["rows"])
+        assert report["transitions"], "a weak and a strong fit should disagree somewhere"
+
+    def test_fixed_and_broke_are_counted_separately(self, two_versions, sentiment):
+        """Aggregate accuracy hides the rows a new version lost. This must not."""
+        from mlango.training.comparison import compare_versions
+
+        left, right = two_versions
+        forward = compare_versions(sentiment, left, right)
+        backward = compare_versions(sentiment, right, left)
+
+        assert forward["labelled"]
+        # Going the other way turns every fix into a break and vice versa,
+        # which is the property that makes the two numbers meaningful.
+        assert forward["fixed"] == backward["broke"]
+        assert forward["broke"] == backward["fixed"]
+
+    def test_the_metric_delta_has_the_sign_of_the_direction(self, two_versions, sentiment):
+        from mlango.training.comparison import compare_versions
+
+        left, right = two_versions
+        assert compare_versions(sentiment, left, right)["metrics"]["delta"] > 0
+        assert compare_versions(sentiment, right, left)["metrics"]["delta"] < 0
+
+    def test_comparing_a_version_with_itself_finds_nothing(self, two_versions, sentiment):
+        from mlango.training.comparison import compare_versions
+
+        report = compare_versions(sentiment, 2, 2)
+        assert report["agreement"] == 1.0
+        assert report["changed"] == 0
+        assert report["fixed"] == report["broke"] == 0
+
+    def test_changed_rows_carry_both_answers_and_the_truth(self, two_versions, sentiment):
+        from mlango.training.comparison import compare_versions
+
+        left, right = two_versions
+        report = compare_versions(sentiment, left, right, max_changes=3)
+
+        assert 0 < len(report["changes"]) <= 3
+        for row in report["changes"]:
+            assert row["left"] != row["right"]
+            assert "expected" in row
+            assert "text" in row, "the feature is carried through so the row is identifiable"
+
+    def test_changes_are_not_collected_unless_asked(self, two_versions, sentiment):
+        """Every row of a large dataset in a report nobody printed is waste."""
+        from mlango.training.comparison import compare_versions
+
+        left, right = two_versions
+        assert "changes" not in compare_versions(sentiment, left, right)
+
+    def test_a_limit_narrows_the_comparison(self, two_versions, sentiment):
+        from mlango.training.comparison import compare_versions
+
+        left, right = two_versions
+        assert compare_versions(sentiment, left, right, limit=10)["rows"] == 10
+
+    def test_unlabelled_data_says_what_changed_not_what_improved(
+        self, two_versions, sentiment, reviews
+    ):
+        from mlango.training.comparison import compare_versions
+
+        left, right = two_versions
+        unlabelled = reviews.objects.get_queryset().map(lambda r: {**r, "label": None})
+        report = compare_versions(sentiment, left, right, queryset=unlabelled)
+
+        assert report["labelled"] is False
+        assert "metrics" not in report
+        assert "changed" in report
+
+    def test_regression_compares_by_distance_not_equality(self, project, isolated_registry):
+        """Float predictions are never equal; the diff has to be about movement."""
+        pytest.importorskip("sklearn")
+
+        from mlango.core import fields
+        from mlango.data import Dataset, InMemorySource
+        from mlango.training import Model
+        from mlango.training.comparison import compare_versions
+
+        class Points(Dataset):
+            """Two numeric features and a noisy target."""
+
+            id = fields.IntegerField()
+            x = fields.FloatField()
+            y = fields.FloatField()
+            value = fields.FloatField()
+
+            class Meta:
+                source = InMemorySource(
+                    [
+                        {"id": i, "x": float(i), "y": float(i % 7), "value": 2.0 * i + (i % 3)}
+                        for i in range(120)
+                    ]
+                )
+                primary_key = "id"
+
+        class Value(Model):
+            alpha = fields.FloatField(default=1.0, tunable=True)
+
+            class Meta:
+                dataset = Points
+                trainer = "sklearn"
+                task = "regression"
+                features = ["x", "y"]
+                target = "value"
+
+            def build(self):
+                from sklearn.linear_model import Ridge
+
+                return Ridge(alpha=self.alpha)
+
+        Value.fit(alpha=0.001)
+        Value.fit(alpha=10_000.0)
+
+        report = compare_versions(Value, 1, 2)
+        assert report["task"] == "regression"
+        assert report["changed"] > 0, "two very different penalties must move the predictions"
+        assert report["mean_absolute_delta"] > 0
+        assert abs(report["largest_delta"]) >= report["mean_absolute_delta"]
+        assert report["closer"] + report["further"] <= report["rows"]
+        assert report["further"] > report["closer"], "the heavily penalised fit is worse"
+
+    def test_an_empty_queryset_is_reported_not_divided_by(self, two_versions, sentiment, reviews):
+        from mlango.training.comparison import compare_versions
+
+        left, right = two_versions
+        empty = reviews.objects.filter(label="nonexistent")
+        with pytest.raises(LookupError, match="no rows"):
+            compare_versions(sentiment, left, right, queryset=empty)

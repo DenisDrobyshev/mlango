@@ -94,6 +94,7 @@ class TestDiscovery:
             "agent",
             "check",
             "dataset",
+            "diff",
             "drift",
             "evaluate",
             "explain",

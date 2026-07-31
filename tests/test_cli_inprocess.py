@@ -817,6 +817,106 @@ class TestDrift:
                 )
 
 
+class TestDiff:
+    @pytest.fixture(scope="module")
+    def two_versions(self, live_trained):
+        """A deliberately weak fit next to the good one already trained.
+
+        The version numbers are read back rather than assumed: this module
+        shares one metastore, so how many versions exist by now depends on
+        which other tests have run.
+        """
+        good = _newest_version("demo.Sentiment")
+        assert (
+            run("train", "demo.Sentiment", "-p", "max_features=1", "-p", "C=0.01", "-v", "0") == 0
+        )
+        return good, _newest_version("demo.Sentiment")
+
+    def test_it_reports_what_moved_and_what_broke(self, two_versions, capsys):
+        good, weak = two_versions
+        assert run("diff", "demo.Sentiment", str(good), str(weak), "-n", "120") == 0
+        out = capsys.readouterr().out
+        assert f"demo.Sentiment v{good} → v{weak}" in out
+        assert "agreement" in out
+        assert "fixed" in out and "broke" in out
+
+    def test_json_carries_the_whole_report(self, two_versions, capsys):
+        good, weak = two_versions
+        assert run("diff", "demo.Sentiment", str(good), str(weak), "-n", "80", "--json") == 0
+        report = json.loads(capsys.readouterr().out)
+        assert report["rows"] == 80
+        assert set(report) >= {"agreement", "changed", "transitions", "fixed", "broke", "metrics"}
+
+    def test_show_changes_prints_the_rows(self, two_versions, capsys):
+        good, weak = two_versions
+        assert (
+            run("diff", "demo.Sentiment", str(good), str(weak), "-n", "120", "--show-changes", "3")
+            == 0
+        )
+        out = capsys.readouterr().out
+        assert "Rows where they disagree" in out
+        assert "expected" in out
+
+    def test_fail_on_regression_is_an_exit_code(self, two_versions, capsys):
+        """Good fit to weak fit is exactly what this is meant to catch."""
+        good, weak = two_versions
+        assert (
+            run("diff", "demo.Sentiment", str(good), str(weak), "-n", "120", "--fail-on-regression")
+            == 1
+        )
+        assert "got right" in capsys.readouterr().err
+
+    def test_no_regression_passes(self, two_versions, capsys):
+        good, weak = two_versions
+        assert (
+            run("diff", "demo.Sentiment", str(weak), str(good), "-n", "120", "--fail-on-regression")
+            == 0
+        )
+        assert "No regression" in capsys.readouterr().out
+
+    def test_one_version_number_is_refused(self, two_versions, capsys):
+        assert run("diff", "demo.Sentiment", "1") == 1
+        assert "two version numbers" in capsys.readouterr().err
+
+    def test_with_no_versions_and_nothing_promoted_it_says_so(self, two_versions, capsys):
+        assert run("diff", "demo.Sentiment") == 1
+        err = capsys.readouterr().err
+        assert "production" in err
+        assert "manage.py diff demo.Sentiment" in err
+
+    def test_with_a_promoted_version_it_picks_the_pair(self, two_versions, capsys):
+        """No arguments answers the question people actually have."""
+        from mlango.core.registry import apps
+        from mlango.metastore.models import Stage
+
+        good, weak = two_versions
+        model_class = apps.get_model("demo.Sentiment")
+        model_class.promote(good, Stage.PRODUCTION)
+        try:
+            assert run("diff", "demo.Sentiment", "-n", "60") == 0
+            assert f"v{good} → v{weak}" in capsys.readouterr().out
+        finally:
+            model_class.promote(good, Stage.ARCHIVED)
+
+    def test_an_unknown_version_is_reported(self, two_versions, capsys):
+        assert run("diff", "demo.Sentiment", "1", "999") == 1
+        assert "999" in capsys.readouterr().err
+
+
+def _newest_version(label: str) -> int:
+    import sqlalchemy as sa
+
+    from mlango.metastore.models import ModelVersion
+    from mlango.metastore.session import session_scope
+
+    with session_scope() as session:
+        return int(
+            session.execute(
+                sa.select(sa.func.max(ModelVersion.version)).where(ModelVersion.label == label)
+            ).scalar_one()
+        )
+
+
 class TestTestCommand:
     def test_a_scaffolded_project_is_green_before_it_is_edited(self, live_project, capsys):
         """startproject ships tests, and they must pass on a fresh checkout."""
