@@ -170,18 +170,54 @@ that, rather than a 500.
 
 ## Deployment
 
-`runserver` is for development. In production, point an ASGI server at the app
-factory:
+`runserver` is for development: one process, autoreload, no worker management.
+
+`startproject` writes an `asgi.py`, the same way a Django project has one. It is
+what a production server points at:
 
 ```bash
-uvicorn "mlango.serve.api:create_app" --factory --host 0.0.0.0 --port 8000 --workers 4
+uvicorn myproject.asgi:application --host 0.0.0.0 --port 8000 --workers 4
+gunicorn myproject.asgi:application -k uvicorn.workers.UvicornWorker -w 4
+```
+
+`application` is built at import, so the registry is populated and every declared
+model is resolvable before the first request arrives rather than during it.
+
+### In a container
+
+`startproject` also writes a `Dockerfile`, a `.dockerignore` and a
+`compose.yaml`. Nothing to research:
+
+```bash
+docker build -t myproject .
+docker run -p 8000:8000 -e MLANGO_SECRET_KEY=... myproject
 ```
 
 ```bash
-gunicorn "mlango.serve.api:create_app()" -k uvicorn.workers.UvicornWorker -w 4
+docker compose up --build      # Postgres for the metastore, one web process
 ```
 
-Set `MLANGO_SETTINGS_MODULE` in the environment, and before you go public:
+The image is two-stage, runs as a non-root user, and its `HEALTHCHECK` calls
+`/api/health` — which reports the registry and whether the metastore is
+reachable, so a container that starts but cannot resolve its settings is marked
+unhealthy rather than passing traffic.
+
+`.dockerignore` excludes `mlango.db` and `artifacts/`, because copying a
+developer's SQLite file into an image is how stale runs reach production.
+
+### Configuration comes from the environment
+
+The scaffolded `settings.py` reads what a deployment has to change, so a
+container never edits a file:
+
+| Variable | Effect |
+|---|---|
+| `MLANGO_SETTINGS_MODULE` | Which settings module to load |
+| `MLANGO_SECRET_KEY` | Overrides the generated development key |
+| `MLANGO_DEBUG=0` | Turns off debug |
+| `DATABASE_URL` | Points the metastore at Postgres |
+
+Before you go public:
 
 - `DEBUG = False`
 - `SECRET_KEY` from your secret store

@@ -51,21 +51,45 @@ if __name__ == "__main__":
     main()
 '''
 
+ASGI_PY = '''"""ASGI entry point for __PROJECT__.
+
+What a production server points at. `manage.py runserver` is for development:
+one process, autoreload, no worker management.
+
+    uvicorn __PROJECT__.asgi:application --host 0.0.0.0 --port 8000 --workers 4
+    gunicorn __PROJECT__.asgi:application -k uvicorn.workers.UvicornWorker -w 4
+
+The module-level `application` is built once per worker at import, so the
+registry is populated and every declared model is resolvable before the first
+request arrives rather than during it.
+"""
+
+import os
+
+from mlango.serve import create_app
+
+os.environ.setdefault("MLANGO_SETTINGS_MODULE", "__PROJECT__.settings")
+
+application = create_app()
+'''
+
 SETTINGS_PY = '''"""Settings for the __PROJECT__ project.
 
 Every available setting and its default lives in
 ``mlango.conf.global_settings`` — override here only what differs.
 """
 
+import os
 from pathlib import Path
 
 # Everything relative (the SQLite file, artifacts, data files) resolves from here.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Keep this out of version control in production.
-SECRET_KEY = "__SECRET__"
+# Keep this out of version control in production. The environment wins, so a
+# deployment sets MLANGO_SECRET_KEY and never edits this file.
+SECRET_KEY = os.environ.get("MLANGO_SECRET_KEY", "__SECRET__")
 
-DEBUG = True
+DEBUG = os.environ.get("MLANGO_DEBUG", "1") == "1"
 
 # Apps whose datasets, models, agents, evals and admin are loaded at startup.
 INSTALLED_APPS = [
@@ -73,9 +97,11 @@ INSTALLED_APPS = [
 ]
 
 # Runs, metrics, artifacts, dataset/model versions and agent traces live here.
-# SQLite needs no setup; point URL at Postgres when a team shares the project.
+# SQLite needs no setup and is right for one process. DATABASE_URL takes over
+# when there is one, which is what compose.yaml sets and what a team sharing the
+# project wants: more than one worker writing runs needs a real database.
 METASTORE = {
-    "URL": "sqlite:///mlango.db",
+    "URL": os.environ.get("DATABASE_URL", "sqlite:///mlango.db"),
 }
 
 # Where checkpoints and materialised datasets are written.
@@ -150,6 +176,112 @@ htmlcov/
 """
 
 REQUIREMENTS = """mlango[sklearn]
+"""
+
+DOCKERFILE = """# A production image for __PROJECT__.
+#
+#   docker build -t __PROJECT__ .
+#   docker run -p 8000:8000 -e MLANGO_SECRET_KEY=... __PROJECT__
+#
+# Two stages so the build tools a wheel might need do not ship to production.
+
+FROM python:3.12-slim AS build
+WORKDIR /app
+
+RUN python -m venv /venv
+ENV PATH="/venv/bin:$PATH"
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt \\
+    && pip install --no-cache-dir "uvicorn[standard]" gunicorn
+
+
+FROM python:3.12-slim
+WORKDIR /app
+
+# Not root: the process only ever needs to read the code and write artifacts.
+RUN useradd --create-home --uid 10001 mlango
+COPY --from=build /venv /venv
+ENV PATH="/venv/bin:$PATH" \\
+    PYTHONUNBUFFERED=1 \\
+    PYTHONDONTWRITEBYTECODE=1 \\
+    MLANGO_SETTINGS_MODULE=__PROJECT__.settings
+
+COPY --chown=mlango:mlango . .
+USER mlango
+
+EXPOSE 8000
+
+# The admin's own check, which reports the metastore and every dotted path in
+# settings. A container that starts but cannot resolve a callback is worse than
+# one that never starts.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \\
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"
+
+# gunicorn manages the workers; uvicorn runs the ASGI app inside each one.
+CMD ["gunicorn", "__PROJECT__.asgi:application", \\
+     "-k", "uvicorn.workers.UvicornWorker", \\
+     "-w", "4", "-b", "0.0.0.0:8000", "--access-logfile", "-"]
+"""
+
+DOCKERIGNORE = """.git
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+
+# Local state. The container gets its own metastore and artifacts, and copying
+# a developer's SQLite file into an image is how stale runs reach production.
+mlango.db
+mlango.db-wal
+mlango.db-shm
+artifacts/
+"""
+
+COMPOSE_YML = """# Development-shaped compose file: Postgres for the metastore, one web process.
+#
+#   docker compose up --build
+#
+# SQLite is fine for one process. More than one worker writing runs wants a real
+# database, which is the only reason Postgres appears here.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mlango
+      POSTGRES_PASSWORD: mlango
+      POSTGRES_DB: mlango
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlango"]
+      interval: 5s
+      retries: 10
+
+  web:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MLANGO_SETTINGS_MODULE: __PROJECT__.settings
+      DATABASE_URL: postgresql+psycopg://mlango:mlango@db:5432/mlango
+    ports:
+      - "8000:8000"
+    volumes:
+      # Artifacts outlive the container; a checkpoint written into a container's
+      # own filesystem is gone the next time it is replaced.
+      - artifacts:/app/artifacts
+
+volumes:
+  pgdata:
+  artifacts:
 """
 
 PROJECT_README = """# __PROJECT__
@@ -617,7 +749,11 @@ def render_project(name: str, target: str, *, demo: bool = True) -> list[str]:
         "manage.py": MANAGE_PY,
         f"{name}/__init__.py": PROJECT_INIT_PY,
         f"{name}/settings.py": SETTINGS_PY,
+        f"{name}/asgi.py": ASGI_PY,
         ".gitignore": GITIGNORE,
+        ".dockerignore": DOCKERIGNORE,
+        "Dockerfile": DOCKERFILE,
+        "compose.yaml": COMPOSE_YML,
         "requirements.txt": REQUIREMENTS,
         "README.md": PROJECT_README,
     }

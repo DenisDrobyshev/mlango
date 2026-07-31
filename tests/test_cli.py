@@ -288,15 +288,105 @@ class TestStartProject:
             "README.md",
             "requirements.txt",
             # A project that ships no tests teaches people not to write any.
+            "Dockerfile",
+            ".dockerignore",
+            "compose.yaml",
             "tests/__init__.py",
             "tests/test_demo.py",
         ):
             assert (scaffold / relative).exists(), relative
 
+    def test_the_asgi_entry_point_builds_an_app(self, scaffold):
+        """What a production server points at. Django ships one; so does this."""
+        result = manage(
+            scaffold,
+            "shell",
+            "-c",
+            "from demoproject.asgi import application; print('app:', application.title)",
+        )
+        assert "app:" in result.stdout
+
+    def test_the_metastore_url_can_come_from_the_environment(self, scaffold):
+        """compose.yaml sets DATABASE_URL, so settings.py has to read it."""
+        import os
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [sys.executable, "manage.py", "check"],
+            cwd=str(scaffold),
+            capture_output=True,
+            text=True,
+            timeout=300,
+            env={
+                **os.environ,
+                "PYTHONIOENCODING": "utf-8",
+                "DATABASE_URL": "postgresql+psycopg://u:p@db:5432/mlango",
+            },
+        )
+        assert "postgresql+psycopg://u:p@db:5432/mlango" in result.stdout
+
+    def test_debug_can_be_turned_off_without_editing_a_file(self, scaffold):
+        import os
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [sys.executable, "manage.py", "check"],
+            cwd=str(scaffold),
+            capture_output=True,
+            text=True,
+            timeout=300,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8", "MLANGO_DEBUG": "0"},
+        )
+        assert "DEBUG is on" not in result.stdout
+
+    def test_the_container_files_name_the_project(self, scaffold):
+        """A placeholder that survives templating produces an unbuildable image."""
+        for name in ("Dockerfile", "compose.yaml"):
+            body = (scaffold / name).read_text(encoding="utf-8")
+            assert "__PROJECT__" not in body, name
+            assert "demoproject" in body, name
+
+    def test_compose_is_valid_yaml(self, scaffold):
+        yaml = pytest.importorskip("yaml")
+
+        config = yaml.safe_load((scaffold / "compose.yaml").read_text(encoding="utf-8"))
+        assert set(config["services"]) == {"db", "web"}
+        assert config["services"]["web"]["depends_on"]["db"]["condition"] == "service_healthy"
+
+    def test_dockerignore_excludes_local_state(self, scaffold):
+        """Copying a developer's SQLite file into an image ships stale runs."""
+        body = (scaffold / ".dockerignore").read_text(encoding="utf-8")
+        for pattern in ("mlango.db", "artifacts/", "__pycache__", ".venv"):
+            assert pattern in body, pattern
+
     def test_the_secret_key_is_generated(self, scaffold):
+        import re
+
         settings = (scaffold / "demoproject" / "settings.py").read_text(encoding="utf-8")
         assert "__SECRET__" not in settings
-        assert 'SECRET_KEY = "' in settings
+
+        # The environment wins, so a deployment never edits this file; the
+        # generated value is the fallback a fresh checkout runs on.
+        match = re.search(
+            r'SECRET_KEY = os\.environ\.get\("MLANGO_SECRET_KEY", "([^"]+)"\)', settings
+        )
+        assert match, settings
+        assert len(match.group(1)) >= 32
+
+    def test_two_projects_get_different_secrets(self, tmp_path):
+        import re
+
+        from mlango.template import render_project
+
+        secrets = []
+        for name in ("alpha", "beta"):
+            render_project(name, str(tmp_path / name), demo=False)
+            body = (tmp_path / name / name / "settings.py").read_text(encoding="utf-8")
+            secrets.append(re.search(r'"MLANGO_SECRET_KEY", "([^"]+)"', body).group(1))
+
+        assert secrets[0] != secrets[1]
 
     def test_no_placeholder_survives(self, scaffold):
         for path in scaffold.rglob("*.py"):

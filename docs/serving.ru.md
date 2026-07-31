@@ -173,19 +173,55 @@ class TenantMiddleware(BaseHTTPMiddleware):
 
 ## Продакшн
 
-`runserver` — для разработки. В продакшне направьте ASGI-сервер на фабрику
-приложения:
+`runserver` — для разработки: один процесс, автоперезагрузка, без управления
+воркерами.
+
+`startproject` создаёт `asgi.py` — так же, как он есть в любом проекте Django.
+Именно на него направляют продакшн-сервер:
 
 ```bash
-uvicorn "mlango.serve.api:create_app" --factory --host 0.0.0.0 --port 8000 --workers 4
+uvicorn myproject.asgi:application --host 0.0.0.0 --port 8000 --workers 4
+gunicorn myproject.asgi:application -k uvicorn.workers.UvicornWorker -w 4
+```
+
+`application` собирается при импорте, поэтому реестр заполнен и каждая
+объявленная модель разрешается до прихода первого запроса, а не во время него.
+
+### В контейнере
+
+`startproject` создаёт также `Dockerfile`, `.dockerignore` и `compose.yaml`.
+Ничего выяснять не нужно:
+
+```bash
+docker build -t myproject .
+docker run -p 8000:8000 -e MLANGO_SECRET_KEY=... myproject
 ```
 
 ```bash
-gunicorn "mlango.serve.api:create_app()" -k uvicorn.workers.UvicornWorker -w 4
+docker compose up --build      # Postgres под метастор, один веб-процесс
 ```
 
-Установите `MLANGO_SETTINGS_MODULE` в окружении, и прежде чем выходить в публичный
-доступ:
+Образ двухстадийный, работает не от root, а его `HEALTHCHECK` дёргает
+`/api/health` — тот сообщает состав реестра и доступность метастора, поэтому
+контейнер, который запустился, но не может разрешить свои настройки, помечается
+нездоровым, а не начинает принимать трафик.
+
+`.dockerignore` исключает `mlango.db` и `artifacts/`: скопировать SQLite-файл
+разработчика в образ — это и есть способ, которым чужие раны попадают в продакшн.
+
+### Конфигурация приходит из окружения
+
+Сгенерированный `settings.py` читает то, что меняет развёртывание, — чтобы
+контейнеру не приходилось править файлы:
+
+| Переменная | Что делает |
+|---|---|
+| `MLANGO_SETTINGS_MODULE` | Какой модуль настроек загружать |
+| `MLANGO_SECRET_KEY` | Перекрывает сгенерированный ключ для разработки |
+| `MLANGO_DEBUG=0` | Выключает отладку |
+| `DATABASE_URL` | Направляет метастор на Postgres |
+
+Прежде чем выходить в публичный доступ:
 
 - `DEBUG = False`
 - `SECRET_KEY` из вашего хранилища секретов

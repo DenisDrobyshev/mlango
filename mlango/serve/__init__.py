@@ -1,5 +1,6 @@
 """Serving: inference API, routing and middleware."""
 
+from mlango.serve.api import create_app, run
 from mlango.serve.endpoints import (
     ChatRequest,
     ChatResponse,
@@ -12,6 +13,8 @@ from mlango.serve.endpoints import (
 from mlango.serve.routing import Endpoint, Route, include, load_routes, path
 
 __all__ = [
+    "create_app",
+    "run",
     "path",
     "include",
     "load_routes",
