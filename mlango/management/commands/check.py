@@ -53,12 +53,28 @@ class Command(BaseCommand):
         if not ready:
             warnings.append("Metastore tables do not exist yet. Run: manage.py migrate")
 
+        from mlango.core import plugins
+
+        discovered = plugins.installed()
+
         self.write("")
         self.write(self.style.bold("Backends"))
         for name, ok in available_trainers().items():
-            self.write(f"  trainer    {name}: {'available' if ok else 'missing dependency'}")
+            origin = " (plugin)" if name in discovered.get("TRAINERS", {}) else ""
+            state = "available" if ok else "missing dependency"
+            self.write(f"  trainer    {name}: {state}{origin}")
         for name, ok in available_providers().items():
-            self.write(f"  provider   {name}: {'available' if ok else 'missing dependency'}")
+            origin = " (plugin)" if name in discovered.get("PROVIDERS", {}) else ""
+            state = "available" if ok else "missing dependency"
+            self.write(f"  provider   {name}: {state}{origin}")
+
+        # Worth naming separately: a backend arriving from an installed package
+        # rather than from settings is the one thing here nobody in the project
+        # wrote down, and so the first thing to doubt when a name resolves to
+        # something surprising.
+        for setting, entries in discovered.items():
+            for name, path in sorted(entries.items()):
+                self.write(self.style.dim(f"  plugin     {setting}[{name!r}] = {path}"))
 
         # Dotted-path settings only fail when something first uses them, which
         # in a sweep means the same import error repeated once per trial.

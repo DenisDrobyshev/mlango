@@ -17,6 +17,13 @@ python manage.py help train
 | `mlango startproject NAME [DIR]` | Scaffold a project that already works. `--bare` skips the demo app |
 | `manage.py startapp NAME` | Scaffold an app: datasets, models, agents, evals, admin, migrations |
 | `manage.py check` | Validate settings, backends, wiring, migrations and the admin |
+| `mlango startplugin NAME --kind trainer` | Scaffold a publishable package that extends mlango |
+
+`startplugin` needs no project: it writes a distributable package — pyproject
+with the entry point already declared, the contract with its interesting parts
+commented, a LICENSE and tests — so `pip install` is all a project needs to reach
+it. `--kind` is `trainer`, `provider`, `storage` or `source`. See
+[Extending mlango](extending.md).
 
 ### Bringing your own data
 

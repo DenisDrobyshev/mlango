@@ -98,6 +98,8 @@ cd myproject
 python manage.py migrate
 python manage.py train demo.Sentiment
 python manage.py runserver
+
+mlango startplugin mlango-lightgbm --kind trainer   # a package others can install
 ```
 
 Open <http://127.0.0.1:8000/admin/>. Unlike a bare scaffold, a fresh mlango

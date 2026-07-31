@@ -17,6 +17,12 @@ python manage.py help train
 | `mlango startproject NAME [DIR]` | Создаёт проект, который уже работает. `--bare` пропускает демо-приложение |
 | `manage.py startapp NAME` | Создаёт приложение: datasets, models, agents, evals, admin, migrations, tests |
 | `manage.py check` | Проверяет настройки, бэкенды, связи, миграции и админку |
+| `mlango startplugin NAME --kind trainer` | Создаёт публикуемый пакет, расширяющий mlango |
+
+`startplugin` не нужен проект: он пишет дистрибутив — pyproject с уже
+объявленным entry point, контракт с комментариями в интересных местах, LICENSE и
+тесты, — так что проекту достаточно `pip install`. `--kind` — это `trainer`,
+`provider`, `storage` или `source`. См. [Расширение](extending.md).
 
 ### Свои данные { #bringing-your-own-data }
 

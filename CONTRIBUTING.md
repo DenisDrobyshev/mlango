@@ -131,6 +131,20 @@ If it is broadly useful, contribute it to `mlango/training/backends/` with
 tests that skip cleanly when the dependency is absent
 (`pytest.importorskip`).
 
+**You do not have to contribute it here.** A trainer or provider can ship as its
+own package and be found automatically:
+
+```bash
+mlango startplugin mlango-lightgbm --kind trainer
+```
+
+That scaffolds a publishable package with the entry point already declared, so
+`pip install mlango-lightgbm` is enough for a project to say
+`trainer = "lightgbm"`. See [Extending mlango](docs/extending.md). A dependency
+that only some people want is usually better outside the framework than inside
+it — mlango staying installable without a compiler is worth more than a longer
+list of built-ins.
+
 ## Documentation
 
 Docs live in `docs/`, built with MkDocs Material. English is the source of
@@ -154,6 +168,11 @@ python -c "import mlango, sys; print(mlango.get_version(), sys.version)"
 ```
 
 and the smallest declaration that reproduces the problem.
+
+## How decisions get made
+
+See [GOVERNANCE.md](GOVERNANCE.md) — who decides, what gets rejected and why,
+and when a change belongs in an extension package instead of here.
 
 ## Code of conduct
 

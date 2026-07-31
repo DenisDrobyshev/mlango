@@ -58,10 +58,21 @@ class SettingsHolder:
             default.update(getattr(self, name, {}) or {})
             setattr(self, name, default)
 
-        for name in ("TRAINERS", "PROVIDERS"):
-            merged = dict(getattr(global_settings, name))
-            merged.update(getattr(self, name, {}) or {})
-            setattr(self, name, merged)
+        # Registries take a third source: packages that advertised themselves
+        # through entry points, so `pip install mlango-lightgbm` is enough to
+        # make trainer = "lightgbm" resolve. The project still wins over both.
+        from mlango.core import plugins
+
+        for name in plugins.GROUPS:
+            setattr(
+                self,
+                name,
+                plugins.merged(
+                    name,
+                    dict(getattr(global_settings, name)),
+                    dict(getattr(self, name, {}) or {}),
+                ),
+            )
 
         if not getattr(self, "BASE_DIR", None):
             self.BASE_DIR = os.getcwd()

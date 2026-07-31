@@ -33,6 +33,21 @@ All notable changes to this project are documented here. The format follows
   `ENDPOINT_URL`; credentials stay boto3's. `Storage` gains `writable()`,
   `readable()` and `fetch()`, which is what lets a backend that is not a
   filesystem serve libraries that only know how to open files.
+- **Extensions are found, not configured.** A package advertising itself through
+  the `mlango.trainers` or `mlango.providers` entry point is merged into the
+  registries at start-up, so `pip install mlango-lightgbm` is enough for a
+  project to write `trainer = "lightgbm"`. Framework defaults, then installed
+  packages, then the project's own settings — the project always wins, because
+  an extension you cannot override is worse than the dotted path it replaced.
+  Nothing is imported during discovery, and `manage.py check` says which
+  backends arrived from a package.
+- **`mlango startplugin NAME --kind trainer|provider|storage|source`** scaffolds
+  the package to publish: pyproject with the entry point already declared, the
+  contract with its interesting parts commented, a LICENSE, and tests including
+  one that proves the entry point resolves. It needs no project — writing an
+  extension should not require inventing somewhere to write it. New docs page:
+  Extending mlango, plus `GOVERNANCE.md` on what belongs in the framework and
+  what belongs in a package.
 
 ### Fixed
 

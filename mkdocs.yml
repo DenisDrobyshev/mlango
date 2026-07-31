@@ -84,6 +84,7 @@ plugins:
             Command line: Командная строка
             Migrations: Миграции
             Community: Сообщество
+            Extending: Расширение
             Contributing: Как участвовать
             Translating: Перевод
 
@@ -132,6 +133,7 @@ nav:
       - Migrations: migrations.md
       - Command line: cli.md
       - Settings: settings.md
+      - Extending: extending.md
   - Community:
       - Contributing: contributing.md
       - Translating: translating.md

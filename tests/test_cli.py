@@ -94,7 +94,9 @@ class TestDiscovery:
             "agent",
             "check",
             "dataset",
+            "drift",
             "evaluate",
+            "explain",
             "inspectdata",
             "makemigrations",
             "migrate",
@@ -104,6 +106,7 @@ class TestDiscovery:
             "shell",
             "showmigrations",
             "startapp",
+            "startplugin",
             "startproject",
             "sweep",
             "test",
@@ -1250,3 +1253,80 @@ class TestQuickstartPromise:
         ).stdout
         summary = json.loads(health.strip().splitlines()[-1])
         assert summary["counts"] == {"dataset": 1, "model": 1, "agent": 1, "eval": 1}
+
+
+class TestStartPlugin:
+    """Run the way an extension author does: outside any project."""
+
+    @pytest.fixture(scope="class")
+    def package(self, tmp_path_factory):
+        root = tmp_path_factory.mktemp("plugin")
+        result = subprocess.run(
+            [sys.executable, "-m", "mlango", "startplugin", "mlango-lightgbm", str(root / "pkg")],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        )
+        if result.returncode != 0:
+            pytest.fail(f"startplugin exited {result.returncode}\n{result.stdout}{result.stderr}")
+        return root / "pkg", result
+
+    def test_it_needs_no_project(self, package):
+        """A settings module is not a prerequisite for writing an extension."""
+        _path, result = package
+        assert result.returncode == 0
+        assert "Created trainer package" in result.stdout
+
+    def test_it_writes_a_publishable_layout(self, package):
+        path, _result = package
+        for relative in (
+            "pyproject.toml",
+            "README.md",
+            "LICENSE",
+            ".gitignore",
+            "src/mlango_lightgbm/__init__.py",
+            "src/mlango_lightgbm/trainer.py",
+            "tests/test_trainer.py",
+        ):
+            assert (path / relative).exists(), f"{relative} was not created"
+
+    def test_the_next_steps_name_the_class_to_write(self, package):
+        _path, result = package
+        assert "LightgbmTrainer" in result.stdout
+        assert "trainer = 'lightgbm'" in result.stdout
+
+    def test_a_name_off_convention_is_a_warning_not_a_refusal(self, tmp_path):
+        result = subprocess.run(
+            [sys.executable, "-m", "mlango", "startplugin", "lightgbm", str(tmp_path / "p")],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        )
+        assert result.returncode == 0, "the convention is a convention, not a rule"
+        assert "mlango-lightgbm" in result.stdout + result.stderr
+
+    def test_a_directory_with_something_in_it_is_refused(self, tmp_path):
+        (tmp_path / "taken").mkdir()
+        (tmp_path / "taken" / "file.txt").write_text("mine", encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, "-m", "mlango", "startplugin", "mlango-x", str(tmp_path / "taken")],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        )
+        assert result.returncode == 1
+        assert "not empty" in result.stderr
+
+    def test_an_unknown_kind_lists_the_real_ones(self, tmp_path):
+        result = subprocess.run(
+            [sys.executable, "-m", "mlango", "startplugin", "mlango-x", "--kind", "wizard"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        )
+        assert result.returncode != 0
+        assert "trainer" in result.stderr
