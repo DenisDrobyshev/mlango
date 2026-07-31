@@ -226,5 +226,61 @@ Before you go public:
 - `METASTORE` pointing at Postgres if more than one worker writes runs
 - `STORAGE` pointing at shared storage if workers must see each other's artifacts
 
+## Training somewhere else { #training-somewhere-else }
+
+A laptop is a fine place to declare a model and a poor place to fit one. What
+makes the GPU box a *part of the project* rather than a machine you copy files
+off is two settings:
+
+```python title="myproject/settings.py"
+METASTORE = {"URL": os.environ["DATABASE_URL"]}          # shared history
+STORAGE = {
+    "BACKEND": "mlango.storage.s3.S3Storage",            # shared artifacts
+    "ROOT": "s3://my-bucket/mlango",
+}
+```
+
+```bash
+pip install "mlango[s3]"
+```
+
+Then the workflow is the same one you already know, run somewhere else:
+
+```bash
+# on the machine with the GPU
+python manage.py train reviews.Sentiment --tag overnight
+```
+
+```bash
+# back on the laptop
+python manage.py runs list
+python manage.py explain reviews.Sentiment
+python manage.py predict reviews.Sentiment "loved it"
+python manage.py runserver
+```
+
+Nothing had to be copied. The run, its metrics, its parameters and its
+reproducibility record are rows the laptop can read; the artifact is an object
+it can fetch; and the admin shows the training you did not watch.
+
+What makes this work is that artifacts are recorded by **storage-relative
+name** — `models/reviews/Sentiment/<run>.joblib`, never
+`/home/gpu/artifacts/models/...`. A run that wrote an absolute path into a
+shared metastore leaves a row that only one machine can resolve, which is a
+subtle way for a shared database to be useless. Versions registered before this
+was true still carry an absolute path, and still load, on the machine that
+wrote them.
+
+The `ENDPOINT_URL` option points the same backend at MinIO, Cloudflare R2 or
+Backblaze B2, so "S3" here means the protocol rather than the vendor.
+Credentials are boto3's — environment variables, instance roles, profiles —
+which is why mlango has no credential settings of its own to leak.
+
+!!! note "What this is not"
+    There is no job scheduler and no cluster support. mlango does not launch the
+    training; you do, with ssh, a Slurm script, a GitHub Actions runner or
+    whatever you already use. What it provides is the part that makes the result
+    reach you.
+
 See [SECURITY.md](https://github.com/DrobyshevDev/mlango/blob/master/SECURITY.md)
 for the full list of development defaults you must change.

@@ -26,15 +26,26 @@ All notable changes to this project are documented here. The format follows
   truth, which is the point, because accuracy in production waits on labels that
   arrive late or never. `--fail-on` makes it usable from a scheduled job, and the
   admin's model page shows the same table. New docs page: Monitoring.
+- **`mlango.storage.s3.S3Storage`** (`pip install "mlango[s3]"`), and with it a
+  story for training somewhere that is not your laptop: a shared metastore plus
+  shared artifacts means `manage.py train` on a GPU box and `Model.load()` on a
+  laptop are the same project. Works against anything S3-compatible via
+  `ENDPOINT_URL`; credentials stay boto3's. `Storage` gains `writable()`,
+  `readable()` and `fetch()`, which is what lets a backend that is not a
+  filesystem serve libraries that only know how to open files.
 
 ### Fixed
 
+- **An artifact trained on one machine could not be read on another.** Runs
+  recorded the absolute path they wrote to, so a shared metastore handed a
+  laptop rows pointing at `/home/gpu/artifacts/...`. Artifacts are now recorded
+  by storage-relative name. Versions registered earlier still carry an absolute
+  path and still load where they were written.
 - **Upgrading mlango no longer means deleting the metastore.** `create_all`
   creates missing tables and ignores missing columns, so a database written by an
   older release failed at the first query with `no such column`. Additive columns
   are now applied on connect, with their declared default so existing rows stay
   valid.
-
 - **A UTF-8 file with a byte-order mark no longer fails to parse.** Excel,
   Notepad and PowerShell all write a BOM by default, so data exported on Windows
   routinely has one — and `JSONLSource`, `JSONSource` and `CSVSource` died on the

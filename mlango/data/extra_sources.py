@@ -241,7 +241,7 @@ class DatasetVersionSource(Source):
                 f"{self.label} has no materialised version{detail}. "
                 f"Run: manage.py dataset materialize {self.label}"
             )
-        return default_storage().path(row.path or "")
+        return default_storage().fetch(row.path or "")
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
         from mlango.data.sources import JSONLSource

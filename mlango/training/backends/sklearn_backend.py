@@ -224,14 +224,17 @@ class SklearnTrainer(Trainer):
 
         from mlango.storage import default_storage
 
-        path = default_storage().path(f"{name}.{self.extension}")
-        joblib.dump(fitted, path)
-        return path
+        with default_storage().writable(f"{name}.{self.extension}") as target:
+            joblib.dump(fitted, target.path)
+            return target.name
 
     def load(self, model, path: str):
         import joblib
 
-        return joblib.load(path)
+        from mlango.storage import default_storage
+
+        with default_storage().readable(path) as local:
+            return joblib.load(local)
 
     # -- introspection -------------------------------------------------------
 

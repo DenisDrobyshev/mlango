@@ -219,3 +219,56 @@ class TestBackendResolution:
         assert store.read_text("a.txt") == "hello"
         assert store.url("a.txt") == "memory://a.txt"
         assert store.listdir() == ["a.txt"]
+
+
+class TestStaging:
+    """``writable`` and ``readable`` are what let a backend not be a filesystem."""
+
+    def test_writable_hands_back_a_real_path(self, storage):
+        import joblib
+
+        with storage.writable("models/demo.joblib") as target:
+            joblib.dump({"weights": [1, 2]}, target.path)
+            name = target.name
+
+        assert name == "models/demo.joblib", "the metastore records the name, not the path"
+        assert storage.exists(name)
+
+    def test_writable_is_the_local_path_for_local_storage(self, storage):
+        with storage.writable("a/b.txt") as target:
+            assert os.path.isabs(target.path)
+            assert target.path == storage.path("a/b.txt")
+
+    def test_a_written_target_works_as_a_path_object(self, storage):
+        with storage.writable("c/d.txt") as target:
+            with open(target, "w", encoding="utf-8") as fh:
+                fh.write("os.PathLike, so a library that takes one is happy")
+        assert "PathLike" in storage.read_text("c/d.txt")
+
+    def test_writable_can_make_a_directory(self, storage):
+        with storage.writable("bundle", directory=True) as target:
+            assert os.path.isdir(target.path)
+            with open(os.path.join(target.path, "config.json"), "w", encoding="utf-8") as fh:
+                fh.write("{}")
+        assert storage.listdir("bundle") == ["bundle/config.json"]
+
+    def test_readable_yields_the_stored_file(self, storage):
+        storage.save_text("notes/readme.txt", "hello")
+        with storage.readable("notes/readme.txt") as local:
+            with open(local, encoding="utf-8") as fh:
+                assert fh.read() == "hello"
+
+    def test_an_absolute_path_passes_through(self, storage, project):
+        """Versions registered before artifacts were recorded by name carry one."""
+        legacy = str(project / "elsewhere.bin")
+        with open(legacy, "wb") as fh:
+            fh.write(b"old")
+        assert storage.locate(legacy) == legacy
+        with storage.readable(legacy) as local:
+            assert local == legacy
+
+    def test_fetch_returns_a_path_that_outlives_the_call(self, storage):
+        storage.save_text("datasets/x/v1/data.jsonl", '{"a": 1}\n')
+        local = storage.fetch("datasets/x/v1/data.jsonl")
+        with open(local, encoding="utf-8") as fh:
+            assert fh.read().strip() == '{"a": 1}'

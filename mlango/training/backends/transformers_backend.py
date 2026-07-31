@@ -381,20 +381,19 @@ class TransformersTrainer(Trainer):
         """Save in the Hugging Face layout, so the artifact is portable."""
         from mlango.storage import default_storage
 
-        storage = default_storage()
-        directory = storage.path(f"{name}/model")
-        import os
-
-        os.makedirs(directory, exist_ok=True)
-        fitted.save_pretrained(directory)
-        self._tokenizer(model).save_pretrained(directory)
-        return directory
+        with default_storage().writable(f"{name}/model", directory=True) as target:
+            fitted.save_pretrained(target.path)
+            self._tokenizer(model).save_pretrained(target.path)
+            return target.name
 
     def load(self, model, path: str):
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-        module = AutoModelForSequenceClassification.from_pretrained(path)
-        model._tokenizer = AutoTokenizer.from_pretrained(path)
+        from mlango.storage import default_storage
+
+        with default_storage().readable(path) as local:
+            module = AutoModelForSequenceClassification.from_pretrained(local)
+            model._tokenizer = AutoTokenizer.from_pretrained(local)
         module.eval()
         return module
 

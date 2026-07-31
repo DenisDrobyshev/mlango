@@ -47,8 +47,28 @@ STORAGE = {
 }
 ```
 
-Checkpoints, materialised datasets and run outputs go here. Point `BACKEND` at
-your own `Storage` subclass for object storage.
+Checkpoints, materialised datasets and run outputs go here. Artifacts are
+recorded in the metastore by storage-relative name, so a run on one machine
+resolves on another.
+
+```python
+STORAGE = {
+    "BACKEND": "mlango.storage.s3.S3Storage",
+    "ROOT": "s3://my-bucket/mlango",
+    # Optional — anything S3-compatible: MinIO, R2, B2.
+    "ENDPOINT_URL": os.environ.get("S3_ENDPOINT_URL"),
+    "REGION": "eu-west-1",
+}
+```
+
+```bash
+pip install "mlango[s3]"
+```
+
+Credentials are boto3's, so the usual environment variables, instance roles and
+profiles all work and mlango never handles a secret it does not have to. Point
+`BACKEND` at your own `Storage` subclass for anything else — see
+[Training somewhere else](serving.md#training-somewhere-else).
 
 ## Training
 
@@ -147,7 +167,7 @@ DEBUG = False
 SECRET_KEY = os.environ["MLANGO_SECRET_KEY"]
 ADMIN_PASSWORD = os.environ["MLANGO_ADMIN_PASSWORD"]
 METASTORE = {"URL": os.environ["DATABASE_URL"]}
-STORAGE = {"BACKEND": "myproject.storage.S3Storage", "ROOT": "s3://bucket/mlango"}
+STORAGE = {"BACKEND": "mlango.storage.s3.S3Storage", "ROOT": "s3://bucket/mlango"}
 DEFAULT_PROVIDER = "anthropic"
 SERVE_API_KEYS = os.environ["MLANGO_API_KEYS"].split(",")
 ```

@@ -265,14 +265,18 @@ class TorchTrainer(Trainer):
 
         from mlango.storage import default_storage
 
-        path = default_storage().path(f"{name}.{self.extension}")
-        torch.save({"state_dict": fitted.state_dict(), "params": model.to_dict()}, path)
-        return path
+        with default_storage().writable(f"{name}.{self.extension}") as target:
+            torch.save({"state_dict": fitted.state_dict(), "params": model.to_dict()}, target.path)
+            saved = target.name
+        return saved
 
     def load(self, model, path: str):
         import torch
 
-        payload = torch.load(path, map_location="cpu", weights_only=False)
+        from mlango.storage import default_storage
+
+        with default_storage().readable(path) as local:
+            payload = torch.load(local, map_location="cpu", weights_only=False)
         module = model.build()
         module.load_state_dict(payload["state_dict"])
         module.eval()

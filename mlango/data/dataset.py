@@ -18,6 +18,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
+import tempfile
 from collections.abc import Iterator
 from typing import Any
 
@@ -164,32 +166,65 @@ class Dataset(Declarative):
         piling up duplicates, so putting ``materialize()`` in a nightly job is
         cheap when nothing changed.
         """
+        from mlango.core.signals import dataset_materialized
+
+        query = queryset if queryset is not None else cls.objects.get_queryset()
+        opts = cls._meta
+
+        # Staged outside storage, because the version number — and so the name
+        # this ends up under — is not known until the content hash has decided
+        # whether a new version is being created at all.
+        staging_dir = tempfile.mkdtemp(prefix="mlango-materialize-")
+        staging_path = os.path.join(staging_dir, "data.jsonl")
+        digest = hashlib.sha256()
+        row_count = 0
+
+        try:
+            with open(staging_path, "w", encoding="utf-8", newline="\n") as fh:
+                for record in query:
+                    payload = canonical_json(dict(record))
+                    digest.update(payload.encode("utf-8"))
+                    digest.update(b"\n")
+                    fh.write(json.dumps(dict(record), ensure_ascii=False) + "\n")
+                    row_count += 1
+
+            content_hash = digest.hexdigest()
+            schema_fingerprint = opts.fingerprint()
+            version = cls._register_materialized(
+                query,
+                staging_path,
+                content_hash=content_hash,
+                schema_fingerprint=schema_fingerprint,
+                row_count=row_count,
+                notes=notes,
+                force=force,
+            )
+        finally:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+
+        dataset_materialized.send(sender=cls, dataset=cls, version=version)
+        return version
+
+    @classmethod
+    def _register_materialized(
+        cls,
+        query: Any,
+        staging_path: str,
+        *,
+        content_hash: str,
+        schema_fingerprint: str,
+        row_count: int,
+        notes: str,
+        force: bool,
+    ) -> Any:
         from sqlalchemy import func, select
 
-        from mlango.core.signals import dataset_materialized
         from mlango.metastore.models import DatasetVersion
         from mlango.metastore.session import session_scope
         from mlango.storage import default_storage
 
-        query = queryset if queryset is not None else cls.objects.get_queryset()
         storage = default_storage()
         opts = cls._meta
-
-        staging_name = f"{cls.storage_prefix()}/.staging-{os.getpid()}.jsonl"
-        staging_path = storage.path(staging_name)
-        digest = hashlib.sha256()
-        row_count = 0
-
-        with open(staging_path, "w", encoding="utf-8", newline="\n") as fh:
-            for record in query:
-                payload = canonical_json(dict(record))
-                digest.update(payload.encode("utf-8"))
-                digest.update(b"\n")
-                fh.write(json.dumps(dict(record), ensure_ascii=False) + "\n")
-                row_count += 1
-
-        content_hash = digest.hexdigest()
-        schema_fingerprint = opts.fingerprint()
 
         with session_scope() as session:
             if not force:
@@ -210,7 +245,6 @@ class Dataset(Declarative):
                     .first()
                 )
                 if existing is not None:
-                    storage.delete(staging_name)
                     return existing
 
             highest = session.execute(
@@ -219,8 +253,10 @@ class Dataset(Declarative):
             version_number = (highest or 0) + 1
 
             final_name = f"{cls.storage_prefix(version_number)}/data.jsonl"
-            final_path = storage.path(final_name)
-            os.replace(staging_path, final_path)
+            with storage.writable(final_name) as target:
+                # Copied rather than moved: the staging directory is a temp dir
+                # and the storage root need not be on the same volume.
+                shutil.copyfile(staging_path, target.path)
 
             version = DatasetVersion(
                 label=opts.label,
@@ -235,7 +271,6 @@ class Dataset(Declarative):
             )
             session.add(version)
 
-        dataset_materialized.send(sender=cls, dataset=cls, version=version)
         return version
 
     @classmethod
@@ -283,7 +318,7 @@ class Dataset(Declarative):
                 f"{cls._meta.label} has no materialised version"
                 + (f" {version}." if version is not None else ". Run materialize() first.")
             )
-        return DataQuerySet(cls, JSONLSource(default_storage().path(row.path or "")))
+        return DataQuerySet(cls, JSONLSource(default_storage().fetch(row.path or "")))
 
     # -- convenience ---------------------------------------------------------
 

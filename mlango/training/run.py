@@ -149,10 +149,7 @@ class RunContext:
         kind: str = "file",
         meta: dict[str, Any] | None = None,
     ) -> None:
-        from mlango.core.hashing import file_digest
-
-        size = os.path.getsize(path) if os.path.exists(path) else 0
-        sha = file_digest(path) if os.path.isfile(path) else ""
+        size, sha = _measure(path)
         with session_scope() as session:
             session.add(
                 Artifact(
@@ -170,11 +167,13 @@ class RunContext:
         from mlango.storage import default_storage
 
         storage = default_storage()
+        # The storage-relative name, not an absolute path: a run on a GPU box
+        # writing "/home/gpu/artifacts/..." into the metastore leaves a row the
+        # laptop reading it cannot resolve, even when both see the same bucket.
         target = f"runs/{self.uuid}/{name}"
         storage.save_text(target, text)
-        path = storage.path(target)
-        self.log_artifact(name, path, kind=kind)
-        return path
+        self.log_artifact(name, target, kind=kind)
+        return target
 
     def log_json(self, name: str, payload: Any) -> str:
         import json
@@ -351,6 +350,36 @@ def iter_runs(**filters: Any) -> Iterator[Run]:
 # --------------------------------------------------------------------------- #
 # Environment capture
 # --------------------------------------------------------------------------- #
+
+
+def _measure(path: str) -> tuple[int, str]:
+    """Size and SHA-256 of a stored artifact, as far as the backend allows.
+
+    Artifacts are recorded by storage-relative name so a run on one machine can
+    be read on another, which means this has to ask storage rather than the
+    filesystem. On a backend with no local path the hash is left empty instead
+    of downloading the object to produce one — the size still lands, and a
+    checkpoint is not worth a round trip to fingerprint at write time.
+    """
+    from mlango.core.hashing import file_digest
+    from mlango.storage import default_storage
+
+    if os.path.isabs(path) and os.path.exists(path):
+        return (os.path.getsize(path), file_digest(path) if os.path.isfile(path) else "")
+
+    storage = default_storage()
+    try:
+        local = storage.locate(path)
+    except Exception:  # noqa: BLE001 - a remote backend says so by raising
+        local = ""
+
+    if local and os.path.exists(local):
+        return (os.path.getsize(local), file_digest(local) if os.path.isfile(local) else "")
+
+    try:
+        return (storage.size(path), "")
+    except Exception:  # noqa: BLE001 - a directory artifact, or already gone
+        return (0, "")
 
 
 def _environment() -> dict[str, Any]:

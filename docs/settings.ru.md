@@ -47,8 +47,28 @@ STORAGE = {
 }
 ```
 
-Сюда попадают чекпоинты, материализованные датасеты и выводы запусков. Для
-объектного хранилища укажите в `BACKEND` свой подкласс `Storage`.
+Сюда попадают чекпоинты, материализованные датасеты и выводы запусков.
+Артефакты записываются в метастор относительным именем, поэтому ран, сделанный
+на одной машине, разрешается на другой.
+
+```python
+STORAGE = {
+    "BACKEND": "mlango.storage.s3.S3Storage",
+    "ROOT": "s3://my-bucket/mlango",
+    # Необязательно — подойдёт любое S3-совместимое: MinIO, R2, B2.
+    "ENDPOINT_URL": os.environ.get("S3_ENDPOINT_URL"),
+    "REGION": "eu-west-1",
+}
+```
+
+```bash
+pip install "mlango[s3]"
+```
+
+Учётные данные — забота boto3, поэтому работают привычные переменные окружения,
+роли инстансов и профили, а mlango не держит в руках ни одного секрета, который
+может не держать. Для чего-то ещё укажите в `BACKEND` свой подкласс `Storage` —
+см. [Обучение на другой машине](serving.md#training-somewhere-else).
 
 ## Обучение
 
@@ -149,7 +169,7 @@ DEBUG = False
 SECRET_KEY = os.environ["MLANGO_SECRET_KEY"]
 ADMIN_PASSWORD = os.environ["MLANGO_ADMIN_PASSWORD"]
 METASTORE = {"URL": os.environ["DATABASE_URL"]}
-STORAGE = {"BACKEND": "myproject.storage.S3Storage", "ROOT": "s3://bucket/mlango"}
+STORAGE = {"BACKEND": "mlango.storage.s3.S3Storage", "ROOT": "s3://bucket/mlango"}
 DEFAULT_PROVIDER = "anthropic"
 SERVE_API_KEYS = os.environ["MLANGO_API_KEYS"].split(",")
 ```
