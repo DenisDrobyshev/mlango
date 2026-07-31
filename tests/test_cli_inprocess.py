@@ -741,6 +741,82 @@ class TestExplain:
         assert "manage.py train demo.Sentiment" in err
 
 
+class TestDrift:
+    @pytest.fixture
+    def with_traffic(self, live_trained):
+        """Serve some obviously different input, so there is drift to find."""
+        from mlango.conf import settings
+        from mlango.core.registry import apps
+
+        before = settings.PREDICTION_LOG
+        settings.PREDICTION_LOG = {"ENABLED": True, "SAMPLE": 1.0, "MAX_ROWS": 0}
+        model = apps.get_model("demo.Sentiment").load()
+        model.predict(["ok"] * 40)
+        yield live_trained
+        settings.PREDICTION_LOG = before
+
+    def test_it_reports_a_verdict_per_column(self, with_traffic, capsys):
+        assert run("drift", "demo.Sentiment") == 0
+        out = capsys.readouterr().out
+        assert "logged predictions over the last 7d" in out
+        assert "PSI" in out and "Verdict" in out
+        assert "significant" in out
+
+    def test_the_predicted_label_is_compared_too(self, with_traffic, capsys):
+        """Prediction drift is the half that needs no ground truth."""
+        assert run("drift", "demo.Sentiment", "--json") == 0
+        scores = json.loads(capsys.readouterr().out)
+        assert "label (predicted)" in scores
+
+    def test_the_training_data_itself_is_stable(self, with_traffic, capsys):
+        assert run("drift", "demo.Sentiment", "--against", "demo.Reviews", "--json") == 0
+        scores = json.loads(capsys.readouterr().out)
+        assert scores["text"]["verdict"] == "stable"
+
+    def test_fail_on_turns_drift_into_an_exit_code(self, with_traffic, capsys):
+        assert run("drift", "demo.Sentiment", "--fail-on", "significant") == 1
+        assert "Drift at or above significant" in capsys.readouterr().err
+
+    def test_fail_on_stays_quiet_when_nothing_moved(self, with_traffic, capsys):
+        assert (
+            run("drift", "demo.Sentiment", "--against", "demo.Reviews", "--fail-on", "significant")
+            == 0
+        )
+
+    def test_a_bad_window_says_what_it_wanted(self, with_traffic, capsys):
+        assert run("drift", "demo.Sentiment", "--since", "soon") == 1
+        assert "24h, 7d or 4w" in capsys.readouterr().err
+
+    def test_an_empty_window_points_at_the_setting(self, with_traffic, capsys):
+        assert run("drift", "demo.Sentiment", "--since", "1h", "-n", "0") == 1
+        assert "PREDICTION_LOG" in capsys.readouterr().err
+
+    def test_a_version_without_a_baseline_says_so(self, with_traffic, capsys):
+        import sqlalchemy as sa
+
+        from mlango.metastore.models import ModelVersion
+        from mlango.metastore.session import session_scope
+
+        with session_scope() as session:
+            row = session.execute(
+                sa.select(ModelVersion)
+                .where(ModelVersion.label == "demo.Sentiment")
+                .order_by(ModelVersion.version.desc())
+                .limit(1)
+            ).scalar_one()
+            saved, row.baseline = row.baseline, None
+            version = row.id
+
+        try:
+            assert run("drift", "demo.Sentiment") == 1
+            assert "no training profile" in capsys.readouterr().err
+        finally:
+            with session_scope() as session:
+                session.execute(
+                    sa.update(ModelVersion).where(ModelVersion.id == version).values(baseline=saved)
+                )
+
+
 class TestTestCommand:
     def test_a_scaffolded_project_is_green_before_it_is_edited(self, live_project, capsys):
         """startproject ships tests, and they must pass on a fresh checkout."""

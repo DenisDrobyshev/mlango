@@ -79,6 +79,7 @@ plugins:
             Operating a project: Эксплуатация проекта
             Admin: Админка
             Serving: Развёртывание
+            Monitoring: Мониторинг
             Settings: Настройки
             Command line: Командная строка
             Migrations: Миграции
@@ -127,6 +128,7 @@ nav:
   - Operating a project:
       - Admin: admin.md
       - Serving: serving.md
+      - Monitoring: monitoring.md
       - Migrations: migrations.md
       - Command line: cli.md
       - Settings: settings.md

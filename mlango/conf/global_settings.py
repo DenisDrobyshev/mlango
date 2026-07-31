@@ -71,6 +71,20 @@ SEED: int | None = 1337
 #: never costs you run history.
 DEFAULT_CALLBACKS: list[str] = []
 
+#: What a served model records about the requests it answers, so drift has
+#: something to measure. Off by default: a prediction log is a copy of user
+#: input in a database, which is a decision a project makes rather than one it
+#: wakes up with.
+#:
+#: ``SAMPLE`` is the fraction of predictions kept — 0.05 is plenty to see a
+#: distribution move and costs almost nothing on a hot endpoint. ``MAX_ROWS``
+#: trims the oldest rows so an always-on log cannot fill the disk.
+PREDICTION_LOG: dict[str, object] = {
+    "ENABLED": False,
+    "SAMPLE": 1.0,
+    "MAX_ROWS": 100_000,
+}
+
 # --- Agents -----------------------------------------------------------------
 
 #: LLM providers available to ``Agent.provider``.

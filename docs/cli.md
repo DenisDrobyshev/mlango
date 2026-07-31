@@ -189,6 +189,30 @@ multiclass, where a feature arguing for one class argues against another.
 how to explain it. Backends that cannot name a feature — the neural ones —
 report nothing rather than inventing a plausible list.
 
+### Watching for drift
+
+Whether the input has moved away from what a version was trained on. Reads the
+prediction log, which is off until you turn it on — see [Monitoring](monitoring.md).
+
+```bash
+python manage.py drift reviews.Sentiment
+python manage.py drift reviews.Sentiment --stage production --since 24h
+python manage.py drift reviews.Sentiment --against reviews.Incoming
+python manage.py drift reviews.Sentiment --since 24h --fail-on significant
+```
+
+```
+reviews.Sentiment@v4 vs 2841 logged predictions over the last 7d
+
+Column             Kind         PSI     Verdict
+-----------------  -----------  ------  -----------
+text               text         0.4132  significant
+label (predicted)  categorical  0.1801  moderate
+```
+
+`--fail-on` exits non-zero, which is what makes this usable from a scheduled job
+rather than only from a terminal.
+
 ### Evaluation
 
 ```bash

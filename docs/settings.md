@@ -58,6 +58,7 @@ your own `Storage` subclass for object storage.
 | `DEVICE` | `"auto"` | `"auto"` picks CUDA when available |
 | `SEED` | `1337` | Seeds python, numpy and torch at the start of every run |
 | `DEFAULT_CALLBACKS` | `[]` | Callbacks appended to every run |
+| `PREDICTION_LOG` | off | What a served model records about its requests |
 
 ```python
 TRAINERS = {"lightgbm": "myproject.trainers.LightGBMTrainer"}
@@ -70,6 +71,19 @@ DEFAULT_CALLBACKS = [
 !!! note
     `DEFAULT_CALLBACKS` is purely additive — metric recording is built into the
     framework, so emptying the list never costs you run history.
+
+```python
+PREDICTION_LOG = {
+    "ENABLED": True,   # off by default
+    "SAMPLE": 0.05,    # keep 5% of predictions
+    "MAX_ROWS": 100_000,
+}
+```
+
+The log is what `manage.py drift` measures against a version's training profile.
+It is off by default because it is a copy of user input in a database — a
+decision a project makes rather than one it wakes up with. See
+[Monitoring](monitoring.md).
 
 ## Agents
 

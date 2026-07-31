@@ -150,6 +150,11 @@ class ModelVersion(Base):
     #: means loading its weights — and an artifact that has been deleted can
     #: still say what it was paying attention to.
     importances: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    #: A summary of the data this version was fitted on, one entry per feature
+    #: plus the target. Without it "has the input drifted" has no answer: you
+    #: can see what production looks like today and nothing to compare it to,
+    #: and by the time anyone asks, the training split is usually gone.
+    baseline: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     stage: Mapped[str] = mapped_column(String(32), default=Stage.NONE)
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, index=True)
@@ -397,6 +402,42 @@ class EvalResult(Base):
         return f"<EvalResult {self.eval_label}:{self.case_id} passed={self.passed}>"
 
 
+# --------------------------------------------------------------------------- #
+# Serving
+# --------------------------------------------------------------------------- #
+
+
+class Prediction(Base):
+    """One request a deployed version answered.
+
+    Off by default. A prediction log is the only record of what a model was
+    asked in production — training data says what it was *expected* to be asked
+    — but it is also a copy of user input in a database, so turning it on is a
+    decision the project makes rather than one it wakes up with.
+    """
+
+    __tablename__ = "mlango_predictions"
+    __table_args__ = (
+        Index("ix_prediction_label_at", "label", "created_at"),
+        Index("ix_prediction_version", "label", "version"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    label: Mapped[str] = mapped_column(String(255), index=True)
+    version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    inputs: Mapped[Any] = mapped_column(JSON, default=dict)
+    output: Mapped[Any] = mapped_column(JSON, nullable=True)
+    latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    @property
+    def ref(self) -> str:
+        return f"{self.label}@v{self.version}" if self.version else self.label
+
+    def __repr__(self) -> str:
+        return f"<Prediction {self.ref} at={self.created_at}>"
+
+
 ALL_TABLES = (
     MigrationRecord,
     DatasetVersion,
@@ -407,6 +448,7 @@ ALL_TABLES = (
     Trace,
     Span,
     EvalResult,
+    Prediction,
 )
 
 __all__ = [
@@ -425,5 +467,6 @@ __all__ = [
     "Trace",
     "Span",
     "EvalResult",
+    "Prediction",
     "ALL_TABLES",
 ]

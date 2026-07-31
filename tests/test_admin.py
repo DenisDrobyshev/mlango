@@ -540,6 +540,28 @@ class TestPagesWithData:
         assert "Registered versions" in text
         assert "v1" in text
 
+    def test_no_drift_card_without_a_prediction_log(self, populated):
+        """An empty drift table on every page teaches people to ignore it."""
+        client, _run, _result, sentiment, _reviews = populated
+        assert "Input drift" not in client.get(f"/o/{sentiment._meta.label}").text
+
+    def test_the_drift_card_appears_once_traffic_is_logged(self, populated):
+        from mlango.conf import settings
+
+        client, _run, _result, sentiment, _reviews = populated
+        before = settings.PREDICTION_LOG
+        settings.PREDICTION_LOG = {"ENABLED": True, "SAMPLE": 1.0, "MAX_ROWS": 0}
+        try:
+            sentiment.load().predict(["ok"] * 30)
+            text = client.get(f"/o/{sentiment._meta.label}").text
+        finally:
+            settings.PREDICTION_LOG = before
+
+        assert "Input drift" in text
+        assert "30 logged predictions from the last 7 days" in text
+        assert 'class="tag significant"' in text
+        assert "label (predicted)" in text
+
     def test_a_model_page_charts_feature_importance(self, populated):
         client, _run, _result, sentiment, _reviews = populated
         text = client.get(f"/o/{sentiment._meta.label}").text

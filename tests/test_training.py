@@ -345,3 +345,113 @@ class TestImportances:
         model = sentiment.fit()
         assert model._version.version >= 1
         assert model._version.importances is None
+
+
+class TestBaseline:
+    def test_training_records_what_it_was_fitted_on(self, project, sentiment):
+        baseline = sentiment.fit()._version.baseline
+        assert set(baseline) == {"text", "label"}
+        assert baseline["label"]["kind"] == "categorical"
+        assert baseline["text"]["kind"] == "text"
+
+    def test_the_baseline_covers_the_training_split_only(self, project, sentiment):
+        """A profile of all 100 rows would describe data the model never saw."""
+        baseline = sentiment.fit(splits={"train": 0.5, "val": 0.5})._version.baseline
+        assert baseline["label"]["count"] < 100
+
+    def test_a_failing_profile_does_not_lose_the_run(self, project, sentiment, monkeypatch):
+        from mlango.training import drift
+
+        monkeypatch.setattr(
+            drift, "profile", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("nope"))
+        )
+        model = sentiment.fit()
+        assert model._version.version >= 1
+        assert model._version.baseline is None
+
+
+class TestPredictionLog:
+    @pytest.fixture
+    def logging_on(self, project):
+        from mlango.conf import settings
+
+        settings.PREDICTION_LOG = {"ENABLED": True, "SAMPLE": 1.0, "MAX_ROWS": 0}
+        yield
+        settings.PREDICTION_LOG = {"ENABLED": False, "SAMPLE": 1.0, "MAX_ROWS": 100_000}
+
+    def _logged(self):
+        import sqlalchemy as sa
+
+        from mlango.metastore.models import Prediction
+        from mlango.metastore.session import session_scope
+
+        with session_scope() as session:
+            return list(session.execute(sa.select(Prediction)).scalars())
+
+    def test_nothing_is_recorded_by_default(self, project, sentiment):
+        sentiment.fit().predict(["great movie", "awful film"])
+        assert self._logged() == []
+
+    def test_a_batch_records_one_row_per_input(self, logging_on, sentiment):
+        model = sentiment.fit()
+        model.predict(["great movie", "awful film"])
+
+        rows = self._logged()
+        assert len(rows) == 2
+        assert {row.inputs for row in rows} == {"great movie", "awful film"}
+        assert all(row.label == sentiment._meta.label for row in rows)
+        assert all(row.version == model._version.version for row in rows)
+        assert all(row.output in {"pos", "neg"} for row in rows)
+
+    def test_latency_is_per_row_not_per_batch(self, logging_on, sentiment):
+        model = sentiment.fit()
+        model.predict(["a movie"] * 10)
+        latencies = [row.latency_ms for row in self._logged()]
+        assert all(value is not None and value >= 0 for value in latencies)
+        assert len(set(latencies)) == 1, "one call, so every row gets the same share"
+
+    def test_sampling_keeps_a_fraction(self, logging_on, sentiment):
+        from mlango.conf import settings
+
+        settings.PREDICTION_LOG = {"ENABLED": True, "SAMPLE": 0.0, "MAX_ROWS": 0}
+        sentiment.fit().predict(["great movie"] * 50)
+        assert self._logged() == []
+
+    def test_max_rows_trims_the_oldest(self, logging_on, sentiment):
+        from mlango.conf import settings
+
+        settings.PREDICTION_LOG = {"ENABLED": True, "SAMPLE": 1.0, "MAX_ROWS": 5}
+        model = sentiment.fit()
+        for index in range(12):
+            model.predict(f"movie number {index}")
+
+        rows = self._logged()
+        assert len(rows) == 5
+        assert "movie number 11" in {row.inputs for row in rows}
+
+    def test_a_broken_metastore_does_not_break_a_prediction(self, logging_on, sentiment):
+        """Observability must never be able to take an endpoint down."""
+        from mlango.metastore import session as session_module
+
+        model = sentiment.fit()
+        original = session_module.session_scope
+
+        def refuse(*args, **kwargs):
+            raise RuntimeError("database is gone")
+
+        session_module.session_scope = refuse
+        try:
+            assert model.predict("great movie") in {"pos", "neg"}
+        finally:
+            session_module.session_scope = original
+
+    def test_logged_inputs_can_be_compared_against_the_baseline(self, logging_on, sentiment):
+        """The whole point: what was logged lines up with what was profiled."""
+        from mlango.training import drift
+
+        model = sentiment.fit()
+        model.predict(["ok"] * 40)
+
+        baseline = {"text": model._version.baseline["text"]}
+        scores = drift.compare(baseline, [row.inputs for row in self._logged()])
+        assert scores["text"]["verdict"] == "significant"

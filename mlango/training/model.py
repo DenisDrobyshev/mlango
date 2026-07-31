@@ -20,6 +20,8 @@ sweepable and recorded on every run without the user writing any of that.
 from __future__ import annotations
 
 import logging
+import random
+import time
 from typing import Any
 
 from mlango.core.base import Declarative
@@ -276,7 +278,13 @@ class Model(Declarative):
                 run.set_summary({**summary, **trainer.describe(self, fitted)})
 
                 if register:
-                    self._register_version(run, trainer, summary, params)
+                    self._register_version(
+                        run,
+                        trainer,
+                        summary,
+                        params,
+                        baseline=_baseline(train_query, features, target),
+                    )
         except RunError:
             raise
         except Exception as exc:  # noqa: BLE001 - re-raised with context below
@@ -285,7 +293,12 @@ class Model(Declarative):
         return run
 
     def _register_version(
-        self, run: RunContext, trainer: Trainer, summary: dict[str, float], params: dict[str, Any]
+        self,
+        run: RunContext,
+        trainer: Trainer,
+        summary: dict[str, float],
+        params: dict[str, Any],
+        baseline: dict[str, Any] | None = None,
     ) -> None:
         from sqlalchemy import func, select
 
@@ -310,6 +323,7 @@ class Model(Declarative):
                 params=_jsonable(params),
                 metrics=_jsonable(summary),
                 importances=_importances(self, trainer),
+                baseline=baseline,
                 stage=Stage.NONE,
             )
             session.add(version)
@@ -335,8 +349,11 @@ class Model(Declarative):
         single = not isinstance(inputs, (list, tuple))
         batch = [inputs] if single else list(inputs)
         pre_predict.send(sender=type(self), model=self, inputs=batch)
+        started = time.perf_counter()
         outputs = self.get_trainer().predict(self, self.fitted, batch)
+        elapsed_ms = (time.perf_counter() - started) * 1000
         post_predict.send(sender=type(self), model=self, inputs=batch, outputs=outputs)
+        log_predictions(self, batch, outputs, elapsed_ms)
         return outputs[0] if single else outputs
 
     def predict_proba(self, inputs: Any) -> Any:
@@ -510,6 +527,111 @@ class Model(Declarative):
         }
 
 
+def _baseline(queryset: Any, features: list[str], target: str) -> dict[str, Any] | None:
+    """Summarise the training split so drift has something to compare against.
+
+    The queryset is already cached by the time this runs, so the extra pass is
+    over memory. Like the importances, a failure here loses a diagnostic and
+    must not lose the model that was just trained.
+    """
+    from mlango.training import drift
+
+    columns = [*features, target] if target and target not in features else list(features)
+    if not columns:
+        return None
+    try:
+        return drift.profile(queryset, columns) or None
+    except Exception:  # noqa: BLE001 - see above
+        logger.debug("Could not profile the training split", exc_info=True)
+        return None
+
+
+def log_predictions(
+    model: Model, inputs: list[Any], outputs: list[Any], elapsed_ms: float | None = None
+) -> int:
+    """Record what a model was asked, when ``PREDICTION_LOG`` is on.
+
+    Best effort throughout. A prediction that succeeded must be returned even
+    if the metastore is unreachable, read-only, or locked by another writer —
+    an observability feature that can take an endpoint down is worse than no
+    observability feature.
+    """
+    from mlango.conf import settings
+
+    config = settings.PREDICTION_LOG
+    if not config.get("ENABLED", False) or not inputs:
+        return 0
+
+    sample = float(config.get("SAMPLE", 1.0) or 0.0)
+    if sample <= 0:
+        return 0
+    if sample < 1.0:
+        # Sampled per row rather than per batch: a batch endpoint would
+        # otherwise record all of a request or none of it, and the log would
+        # follow request sizes instead of the input distribution.
+        keep = [index for index in range(len(inputs)) if random.random() < sample]
+    else:
+        keep = list(range(len(inputs)))
+    if not keep:
+        return 0
+
+    try:
+        from mlango.core.serialization import jsonable
+        from mlango.metastore.models import Prediction
+        from mlango.metastore.session import session_scope
+
+        version = getattr(model, "_version", None)
+        label = type(model)._meta.label
+        # Divided out so a batch of 500 does not report each row as taking as
+        # long as the whole call.
+        per_row = elapsed_ms / len(inputs) if elapsed_ms is not None and inputs else None
+
+        with session_scope() as session:
+            for index in keep:
+                session.add(
+                    Prediction(
+                        label=label,
+                        version=getattr(version, "version", None),
+                        inputs=jsonable(inputs[index]),
+                        output=jsonable(outputs[index]) if index < len(outputs) else None,
+                        latency_ms=per_row,
+                    )
+                )
+        _trim_predictions(label, int(config.get("MAX_ROWS", 0) or 0))
+        return len(keep)
+    except Exception:  # noqa: BLE001 - see above
+        logger.debug("Could not record predictions for %s", type(model)._meta.label, exc_info=True)
+        return 0
+
+
+def _trim_predictions(label: str, max_rows: int) -> None:
+    """Keep the newest ``max_rows`` for this model and drop the rest."""
+    if max_rows <= 0:
+        return
+    from sqlalchemy import delete, func, select
+
+    from mlango.metastore.models import Prediction
+    from mlango.metastore.session import session_scope
+
+    with session_scope() as session:
+        total = session.execute(
+            select(func.count()).select_from(Prediction).where(Prediction.label == label)
+        ).scalar_one()
+        if total <= max_rows:
+            return
+        cutoff = session.execute(
+            select(Prediction.id)
+            .where(Prediction.label == label)
+            .order_by(Prediction.id.desc())
+            .offset(max_rows - 1)
+            .limit(1)
+        ).scalar_one_or_none()
+        if cutoff is not None:
+            session.execute(
+                delete(Prediction).where(Prediction.label == label, Prediction.id < cutoff)
+            )
+
+
 def _importances(model: Model, trainer: Trainer) -> dict[str, float] | None:
     """Ask the backend to explain the fit, and never let the answer break it.
 
@@ -526,4 +648,4 @@ def _importances(model: Model, trainer: Trainer) -> dict[str, float] | None:
         return None
 
 
-__all__ = ["Model"]
+__all__ = ["Model", "log_predictions"]

@@ -236,6 +236,7 @@ python manage.py makemigrations && python manage.py migrate
 python manage.py train reviews.Sentiment -p C=2.0 --tag baseline
 python manage.py predict reviews.Sentiment "loved every minute"
 python manage.py explain reviews.Sentiment                # what the fit relied on
+python manage.py drift reviews.Sentiment --since 24h      # has the input moved?
 python manage.py sweep reviews.Sentiment -p C=0.25,1,4 --promote-best production
 python manage.py runs list
 python manage.py runs compare 7c8f1020 c089b7e6

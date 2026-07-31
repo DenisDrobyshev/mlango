@@ -8,6 +8,7 @@ from mlango.metastore.models import (
     Metric,
     MigrationRecord,
     ModelVersion,
+    Prediction,
     Run,
     RunKind,
     RunStatus,
@@ -17,6 +18,7 @@ from mlango.metastore.models import (
     utcnow,
 )
 from mlango.metastore.session import (
+    align_schema,
     create_all,
     dispose_all,
     drop_all,
@@ -37,6 +39,7 @@ __all__ = [
     "Metric",
     "MigrationRecord",
     "ModelVersion",
+    "Prediction",
     "Run",
     "RunKind",
     "RunStatus",
@@ -44,6 +47,7 @@ __all__ = [
     "Stage",
     "Trace",
     "utcnow",
+    "align_schema",
     "create_all",
     "dispose_all",
     "drop_all",

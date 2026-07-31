@@ -19,6 +19,13 @@ All notable changes to this project are documented here. The format follows
   `importances()`; the sklearn backend names a pipeline's columns from its
   vectoriser, so a text model reports words rather than indices. Backends that
   cannot name a feature report nothing rather than inventing a list.
+- **Drift detection.** Training records a profile of the split it fitted on;
+  serving records what it was asked, when `PREDICTION_LOG` is turned on; and
+  `manage.py drift` compares the two with a population stability index. Input
+  drift and prediction drift are both reported — the second needs no ground
+  truth, which is the point, because accuracy in production waits on labels that
+  arrive late or never. `--fail-on` makes it usable from a scheduled job, and the
+  admin's model page shows the same table. New docs page: Monitoring.
 
 ### Fixed
 

@@ -188,6 +188,30 @@ every        ███████████████████·····
 научился объяснять. Бэкенды, которые не могут назвать признак — нейросетевые, —
 не сообщают ничего, вместо того чтобы выдумать правдоподобный список.
 
+### Слежение за дрейфом
+
+Ушёл ли вход от того, на чём обучалась версия. Читает лог предсказаний, который
+выключен, пока вы его не включите, — см. [Мониторинг](monitoring.md).
+
+```bash
+python manage.py drift reviews.Sentiment
+python manage.py drift reviews.Sentiment --stage production --since 24h
+python manage.py drift reviews.Sentiment --against reviews.Incoming
+python manage.py drift reviews.Sentiment --since 24h --fail-on significant
+```
+
+```
+reviews.Sentiment@v4 vs 2841 logged predictions over the last 7d
+
+Column             Kind         PSI     Verdict
+-----------------  -----------  ------  -----------
+text               text         0.4132  significant
+label (predicted)  categorical  0.1801  moderate
+```
+
+`--fail-on` завершается ненулевым кодом — именно это делает команду пригодной для
+регулярной задачи, а не только для терминала.
+
 ### Оценка
 
 ```bash

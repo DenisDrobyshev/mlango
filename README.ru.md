@@ -228,6 +228,7 @@ python manage.py makemigrations && python manage.py migrate
 python manage.py train reviews.Sentiment -p C=2.0 --tag baseline
 python manage.py predict reviews.Sentiment "понравилось от начала до конца"
 python manage.py explain reviews.Sentiment       # на что опиралась модель
+python manage.py drift reviews.Sentiment --since 24h  # сдвинулся ли вход?
 python manage.py sweep reviews.Sentiment -p C=0.25,1,4 --promote-best production
 python manage.py runs list
 python manage.py runs compare 7c8f1020 c089b7e6
@@ -308,7 +309,7 @@ SERVE_MIDDLEWARE = ["mlango.serve.middleware.ApiKeyMiddleware", ...]
 ```
   core            поля · метакласс · Options · реестр · настройки · сигналы
     │             (ничего больше из mlango не импортирует)
-    ├── metastore   9 таблиц: раны, метрики, артефакты, версии, трейсы, спаны…
+    ├── metastore   10 таблиц: раны, метрики, артефакты, версии, трейсы, спаны…
     ├── storage     артефакты за одним узким интерфейсом
     │
     ├── data ─────┐

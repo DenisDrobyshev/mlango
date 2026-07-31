@@ -177,6 +177,30 @@
   {% else %}<p class="empty">Not trained yet.</p>{% endif %}
 </div>
 
+{% if drift %}
+<div class="card">
+  <h2>Input drift</h2>
+  <p class="subtitle">{{ drift.rows }} logged prediction{{ '' if drift.rows == 1 else 's' }} from the last {{ drift.days }} days, against what v{{ drift.version }} was trained on.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Column</th><th>Kind</th><th>Rows</th><th>PSI</th><th>Verdict</th></tr></thead>
+    <tbody>
+      {% for column in drift.columns %}
+      <tr>
+        <td class="mono">{{ column.name }}</td>
+        <td>{{ column.kind }}</td>
+        <td class="num">{{ column.count | number }}</td>
+        <td class="num mono">{{ '%.4f' | format(column.psi) }}</td>
+        <td><span class="tag {{ column.verdict }}">{{ column.verdict }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="subtitle">Population stability index: below 0.1 stable, 0.1–0.25 moderate, above 0.25 significant.</p>
+</div>
+{% endif %}
+
 {% if importances %}
 <div class="card">
   <h2>Feature importance</h2>

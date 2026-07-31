@@ -165,6 +165,7 @@ def build_admin_app(site: AdminSite | None = None) -> FastAPI:
             context["versions"] = versions
             context["runs"] = _runs_for(label)
             context["importances"] = _importance_bars(versions)
+            context["drift"] = _drift_summary(entry.target, versions)
         elif entry.kind == "agent":
             from mlango.agents.tracing import recent_traces
 
@@ -417,6 +418,72 @@ def _importance_bars(versions: list[Any], limit: int = 20) -> dict[str, Any] | N
             }
             for name, value in ranked
         ],
+    }
+
+
+#: Enough rows for a stable index without turning a page load into a scan.
+DRIFT_SAMPLE = 2000
+DRIFT_WINDOW_DAYS = 7
+
+
+def _drift_summary(model_class: Any, versions: list[Any]) -> dict[str, Any] | None:
+    """Recent logged traffic measured against the version's training profile.
+
+    Returns None whenever the answer would be meaningless — the log is off, the
+    version predates baselines, nothing has been served — because an empty
+    drift table on every model page teaches people to ignore the drift table.
+    """
+    import datetime as dt
+
+    from sqlalchemy import select
+
+    from mlango.metastore.models import Prediction, utcnow
+    from mlango.metastore.session import session_scope
+    from mlango.training import drift
+
+    version = next((v for v in versions if v.baseline), None)
+    if version is None:
+        return None
+
+    label = version.label
+    since = utcnow() - dt.timedelta(days=DRIFT_WINDOW_DAYS)
+    with session_scope() as session:
+        rows = list(
+            session.execute(
+                select(Prediction.inputs, Prediction.output)
+                .where(Prediction.label == label, Prediction.created_at >= since)
+                .order_by(Prediction.created_at.desc())
+                .limit(DRIFT_SAMPLE)
+            )
+        )
+    if not rows:
+        return None
+
+    baseline = version.baseline or {}
+    try:
+        features = model_class.get_features()
+        target = model_class.get_target()
+    except Exception:  # noqa: BLE001 - an incomplete declaration still renders
+        features, target = list(baseline), ""
+
+    scores = drift.compare(
+        {k: v for k, v in baseline.items() if k in features}, [r[0] for r in rows]
+    )
+    outputs = [r[1] for r in rows if r[1] is not None]
+    if outputs and target in baseline:
+        predicted = drift.compare({target: baseline[target]}, outputs)
+        if target in predicted:
+            scores[f"{target} (predicted)"] = predicted[target]
+    if not scores:
+        return None
+
+    ranked = sorted(scores.items(), key=lambda pair: -pair[1]["psi"])
+    return {
+        "version": version.version,
+        "rows": len(rows),
+        "days": DRIFT_WINDOW_DAYS,
+        "worst": ranked[0][1]["verdict"],
+        "columns": [{"name": name, **entry} for name, entry in ranked],
     }
 
 
