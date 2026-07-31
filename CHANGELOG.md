@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## Unreleased
 
+## 0.2.0 — 2026-07-31
+
+Everything in this release answers a question a project has *after* the model
+trains: why did it say that, has the world moved, what did the new version
+break, and how does any of it leave the laptop it was fitted on.
+
 ### Added
 
 - **Deployment is scaffolded, not improvised.** `startproject` now writes

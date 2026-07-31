@@ -101,6 +101,16 @@ jobs:
           /tmp/fresh/bin/python manage.py migrate
           /tmp/fresh/bin/python manage.py train demo.Sentiment
           /tmp/fresh/bin/python manage.py evaluate demo.SentimentAccuracy
+          # Every command that reads what training wrote. A packaging mistake
+          # that drops a module shows up here and nowhere else in this job:
+          # the suite runs against the source tree, not the built wheel.
+          /tmp/fresh/bin/python manage.py explain demo.Sentiment -n 5
+          /tmp/fresh/bin/python manage.py drift demo.Sentiment --against demo.Reviews
+          /tmp/fresh/bin/python manage.py train demo.Sentiment -p max_features=1 -v 0
+          /tmp/fresh/bin/python manage.py diff demo.Sentiment 1 2 -n 100
+          cd /tmp
+          /tmp/fresh/bin/mlango startplugin mlango-smoke --kind trainer
+          test -f mlango-smoke/pyproject.toml
 
       - uses: actions/upload-artifact@v7
         with:
