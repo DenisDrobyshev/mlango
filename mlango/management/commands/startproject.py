@@ -66,3 +66,10 @@ class Command(BaseCommand):
             self.write("Then add an app: python manage.py startapp myapp")
         else:
             self.write("Then open http://127.0.0.1:8000/admin/ — it will already have data in it.")
+            self.write("")
+            # The scaffold writes tests, so it has to say how to run them. They
+            # need pytest, which is not in requirements.txt because that file
+            # builds the production image.
+            self.write(self.style.dim("The project ships tests. To run them:"))
+            self.write(self.style.dim("  pip install -r requirements-dev.txt"))
+            self.write(self.style.dim("  python manage.py test"))

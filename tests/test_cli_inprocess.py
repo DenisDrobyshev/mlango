@@ -387,6 +387,48 @@ class TestStartApp:
         assert "already exists and is not empty" in capsys.readouterr().err
 
 
+class TestScaffoldedProjectCanRunItsOwnTests:
+    """A project that ships a test file it cannot run teaches the wrong lesson.
+
+    `startproject` writes `tests/test_demo.py` and `manage.py test` runs it, but
+    that needs pytest, which is deliberately absent from requirements.txt
+    because the generated Dockerfile installs that file into the production
+    image. Following the printed steps exactly used to end at "pytest is not
+    installed".
+    """
+
+    def rendered(self, tmp_path):
+        from mlango.template import render_project
+
+        target = tmp_path / "scaffolded"
+        render_project("scaffolded", str(target), demo=True)
+        return target
+
+    def test_the_dev_requirements_bring_in_a_test_runner(self, tmp_path):
+        dev = (self.rendered(tmp_path) / "requirements-dev.txt").read_text(encoding="utf-8")
+        assert "pytest" in dev
+
+    def test_the_dev_requirements_include_the_production_ones(self, tmp_path):
+        # Otherwise installing them alone gives you a runner and no framework.
+        dev = (self.rendered(tmp_path) / "requirements-dev.txt").read_text(encoding="utf-8")
+        assert "-r requirements.txt" in dev
+
+    def test_the_production_requirements_stay_free_of_a_test_runner(self, tmp_path):
+        # This file is what the generated Dockerfile installs. pytest does not ship.
+        prod = (self.rendered(tmp_path) / "requirements.txt").read_text(encoding="utf-8")
+        assert "pytest" not in prod
+
+    def test_a_test_file_is_actually_scaffolded(self, tmp_path):
+        # If this ever stops being true, the rest of this class is pointless.
+        assert (self.rendered(tmp_path) / "tests" / "test_demo.py").exists()
+
+    def test_the_scaffold_says_how_to_run_the_tests_it_wrote(self, tmp_path, capsys):
+        assert run("startproject", "spelled_out", str(tmp_path / "spelled_out")) == 0
+        out = capsys.readouterr().out
+        assert "requirements-dev.txt" in out
+        assert "manage.py test" in out
+
+
 class TestInspectData:
     @pytest.fixture(scope="class")
     def csv_file(self, live_project):

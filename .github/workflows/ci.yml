@@ -138,14 +138,43 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: pyproject.toml
-      # `dev` as well as `sklearn`: the scaffold ships tests, and running them
-      # below needs pytest.
-      - run: pip install -e ".[sklearn,dev]"
+      # Built and installed, not `pip install -e`. An editable install puts the
+      # checkout on the path, so a module missing from the wheel still imports
+      # and this job stays green for someone who typed `pip install mlango` and
+      # got a broken package.
+      #
+      # And no `dev` extra. Installing it here made `manage.py test` below pass
+      # for a reason no user has: the scaffold's own requirements did not bring
+      # a test runner, so following the printed steps exactly ended at "pytest
+      # is not installed" while CI said the quickstart worked.
+      - name: Build the wheel and install that
+        run: |
+          pip install build
+          python -m build --wheel --outdir dist
+          pip install "$(ls dist/*.whl)[sklearn]"
 
       # The README promises four commands from nothing to a working admin.
       # This job is what keeps that promise honest.
       - name: startproject
         run: mlango startproject demoproject
+
+      # Exactly what the scaffold tells the user to run. It must be enough.
+      - name: Install what the scaffold asks for
+        working-directory: demoproject
+        run: pip install -r requirements-dev.txt
+
+      - name: The framework under test is the installed one
+        working-directory: demoproject
+        run: |
+          python - <<'PY'
+          import pathlib
+
+          import mlango
+
+          here = pathlib.Path(mlango.__file__).resolve()
+          assert "site-packages" in here.parts, f"testing the checkout, not the wheel: {here}"
+          print(f"mlango {mlango.__version__} from {here.parent}")
+          PY
 
       - name: check
         working-directory: demoproject

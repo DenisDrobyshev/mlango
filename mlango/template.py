@@ -178,6 +178,15 @@ htmlcov/
 REQUIREMENTS = """mlango[sklearn]
 """
 
+# Separate from requirements.txt because the Dockerfile below installs that one
+# into the production image, and a test runner has no business shipping there.
+# It exists at all because the scaffold writes tests and `manage.py test` runs
+# them: a project that ships a test file it cannot run teaches the wrong first
+# lesson, and this framework is not the one to teach it.
+REQUIREMENTS_DEV = """-r requirements.txt
+pytest>=8.0
+"""
+
 DOCKERFILE = """# A production image for __PROJECT__.
 #
 #   docker build -t __PROJECT__ .
@@ -755,6 +764,7 @@ def render_project(name: str, target: str, *, demo: bool = True) -> list[str]:
         "Dockerfile": DOCKERFILE,
         "compose.yaml": COMPOSE_YML,
         "requirements.txt": REQUIREMENTS,
+        "requirements-dev.txt": REQUIREMENTS_DEV,
         "README.md": PROJECT_README,
     }
 
